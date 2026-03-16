@@ -14,7 +14,8 @@ from services.lock_service import check_lock, create_lock
 
 st.set_page_config(
     page_title="Tablero Implementación PNA",
-    layout="wide"
+    layout="wide",
+    page_icon="www/favicon.png"
 )
 
 BASE_FILE = "/base_pna.xlsx"
@@ -26,20 +27,12 @@ BASE_FILE = "/base_pna.xlsx"
 
 st.markdown("""
 <style>
-
-header {visibility: hidden;}
-
 .stButton>button {
     background-color:#0b7c83;
     color:white;
     border-radius:6px;
     height:40px;
 }
-
-.logout button {
-    background-color:#a11d3a;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,31 +50,42 @@ def find_column(df, keys):
         for k in keys:
 
             if k in name:
-
                 return c
 
     return None
 
 
 # =====================================================
+# CARGAR EXCEL
+# =====================================================
+
+def load_excel(path):
+
+    try:
+        return pd.read_excel(path)
+
+    except:
+        st.error(f"No se pudo cargar {path}")
+        st.stop()
+
+
+# =====================================================
 # LOGIN
 # =====================================================
 
-users = pd.read_excel("www/user-pass.xlsx")
+users = load_excel("www/user-pass.xlsx")
 
 user_col = find_column(users, ["user"])
 pass_col = find_column(users, ["pass"])
 
-
 if "login" not in st.session_state:
     st.session_state.login = False
-
 
 if "hash_users" not in st.session_state:
 
     hashes = {}
 
-    for _,row in users.iterrows():
+    for _, row in users.iterrows():
 
         hashes[row[user_col]] = bcrypt.hashpw(
             str(row[pass_col]).encode(),
@@ -127,7 +131,7 @@ if not st.session_state.login:
 col1,col2,col3 = st.columns([1,6,2])
 
 with col1:
-    st.image("www/logo_tablero.png", width=120)
+    st.image("www/logo_tablero.png", width=110)
 
 with col2:
     st.markdown("### Sistema Estatal Anticorrupción")
@@ -143,55 +147,44 @@ with col3:
 
         st.rerun()
 
-
 st.divider()
 
 
 # =====================================================
-# SIDEBAR
+# ACTOR AUTOMATICO
 # =====================================================
 
-with st.sidebar:
-
-    st.markdown("### Año")
-
-    year = st.selectbox("", ["2025"])
-
-
-# =====================================================
-# ACTOR
-# =====================================================
-
-actores = pd.read_excel("www/user-act.xlsx")
+actores = load_excel("www/user-act.xlsx")
 
 user_col_act = find_column(actores, ["user"])
 actor_col = find_column(actores, ["act"])
 
-
-actor = "Sin actor"
-
 fila = actores[actores[user_col_act] == st.session_state.user]
 
-if len(fila) > 0:
+actor = "SIN_ACTOR"
 
+if len(fila) > 0:
     actor = fila.iloc[0][actor_col]
 
 
 # =====================================================
-# BLOQUEO
+# BLOQUEO MULTIUSUARIO
 # =====================================================
 
-if check_lock():
+try:
 
-    st.warning("⚠ Otro usuario está editando")
+    if check_lock():
+        st.warning("⚠ Otro usuario está editando")
 
-else:
+    else:
+        create_lock(st.session_state.user)
 
-    create_lock(st.session_state.user)
+except:
+    pass
 
 
 # =====================================================
-# CARGAR BASE
+# CARGAR BASE DROPBOX
 # =====================================================
 
 def load_base():
@@ -200,9 +193,7 @@ def load_base():
 
         data = download_file(BASE_FILE)
 
-        df = pd.read_excel(io.BytesIO(data))
-
-        return df
+        return pd.read_excel(io.BytesIO(data))
 
     except:
 
@@ -214,12 +205,39 @@ df = load_base()
 if "data" not in st.session_state:
 
     if not df.empty:
-
         st.session_state.data = df.to_dict("records")
 
     else:
-
         st.session_state.data = []
+
+
+# =====================================================
+# CARGAR CATALOGOS
+# =====================================================
+
+alineacion = load_excel("www/alineacion_pi.xlsx")
+
+tipo_df = load_excel("www/tipo_accion.xlsx")
+
+tipo_list = tipo_df.iloc[:,0].dropna().tolist()
+
+estrategia_col = find_column(alineacion, ["estrategia"])
+linea_col = find_column(alineacion, ["linea","línea"])
+
+
+# =====================================================
+# FILTRAR LINEAS POR ACTOR
+# =====================================================
+
+actores_lineas = load_excel("www/pi-actores.xlsx")
+
+actor_col_actor = find_column(actores_lineas, ["actor"])
+linea_col_actor = find_column(actores_lineas, ["linea","línea"])
+
+lineas_actor = actores_lineas.loc[
+    actores_lineas[actor_col_actor] == actor,
+    linea_col_actor
+].dropna().unique()
 
 
 # =====================================================
@@ -228,48 +246,37 @@ if "data" not in st.session_state:
 
 st.title("Reporte de Acciones 2025")
 st.caption("Programa de Implementación del PNA")
+st.caption(f"Institución: *{actor}*")
 
 
 # =====================================================
 # SELECTORES
 # =====================================================
 
-col1, col2, col3 = st.columns(3)
+col1,col2,col3 = st.columns(3)
 
 with col1:
 
-    estrategia = st.selectbox(
-        "Estrategia",
-        alineacion[estrategia_col].unique()
-    )
+    estrategias = alineacion[estrategia_col].dropna().unique()
+
+    estrategia = st.selectbox("Estrategia", estrategias)
 
 
 lineas = alineacion.loc[
-    alineacion[estrategia_col] == estrategia,
+    (alineacion[estrategia_col] == estrategia) &
+    (alineacion[linea_col].isin(lineas_actor)),
     linea_col
-].unique()
+].dropna().unique()
 
 
 with col2:
 
-    linea = st.selectbox(
-        "Línea de acción",
-        lineas
-    )
-
-
-acciones = alineacion.loc[
-    alineacion[linea_col] == linea,
-    linea_col
-]
+    linea = st.selectbox("Línea de acción", lineas)
 
 
 with col3:
 
-    accion = st.selectbox(
-        "Acción",
-        acciones
-    )
+    accion = st.text_input("Acción")
 
 
 st.divider()
@@ -279,52 +286,16 @@ st.divider()
 # BOTONES
 # =====================================================
 
-col1, col2, col3 = st.columns(3)
+col1,col2,col3 = st.columns(3)
 
 with col1:
     add = st.button("➕ Agregar Acción")
 
 with col2:
-    save = st.button(" Guardar Borrador")
+    save = st.button("💾 Guardar Borrador")
 
 with col3:
-    send = st.button(" Enviar")
-
-
-# =====================================================
-# ALINEACION
-# =====================================================
-
-alineacion = pd.read_excel("www/alineacion_pi.xlsx")
-
-estrategia_col = find_column(alineacion, ["estrategia"])
-linea_col = find_column(alineacion, ["linea","línea"])
-
-
-estrategia = st.selectbox(
-    "Estrategia",
-    alineacion[estrategia_col].unique()
-)
-
-lineas = alineacion.loc[
-    alineacion[estrategia_col] == estrategia,
-    linea_col
-].unique()
-
-linea = st.selectbox(
-    "Línea de acción",
-    lineas
-)
-
-acciones = alineacion.loc[
-    alineacion[linea_col] == linea,
-    linea_col
-]
-
-accion = st.selectbox(
-    "Acción",
-    acciones
-)
+    send = st.button("📤 Enviar")
 
 
 # =====================================================
@@ -335,36 +306,96 @@ if add:
 
     st.session_state.data.append({
 
-        "Actor":actor,
-        "Estrategia":estrategia,
-        "Linea":linea,
-        "Accion":accion,
-        "Inicio":"",
-        "Fin":"",
-        "Tipo":"",
-        "Tematica":""
+        "Actor": actor,
+        "Estrategia": estrategia,
+        "Linea": linea,
+        "Accion": accion,
+        "Inicio": "",
+        "Fin": "",
+        "Tipo": "",
+        "Tematica": ""
 
     })
 
 
 # =====================================================
-# TABLA
+# FILTRAR SOLO INSTITUCION
 # =====================================================
 
-st.info(
-    f"Año: {year} | Acciones: {len(st.session_state.data)}"
-)
+df_all = pd.DataFrame(st.session_state.data)
 
-df_table = pd.DataFrame(st.session_state.data)
+if "Actor" not in df_all.columns:
+    df_all["Actor"] = actor
+
+df_table = df_all[df_all["Actor"] == actor].copy()
+
+
+# =====================================================
+# TABLA CON BOTON ELIMINAR
+# =====================================================
+
+df_table["Eliminar"] = False
 
 edited = st.data_editor(
+
     df_table,
+
     num_rows="dynamic",
+
     use_container_width=True,
-    height=400
+
+    height=420,
+
+    column_config={
+
+        "Eliminar": st.column_config.CheckboxColumn(
+            "🗑",
+            help="Eliminar fila"
+        ),
+
+        "Inicio": st.column_config.DateColumn(
+            "Inicio",
+            format="DD/MM/YYYY"
+        ),
+
+        "Fin": st.column_config.DateColumn(
+            "Fin",
+            format="DD/MM/YYYY"
+        ),
+
+        "Tipo": st.column_config.SelectboxColumn(
+            "Tipo de Acción",
+            options=tipo_list
+        ),
+
+        "Tematica": st.column_config.TextColumn("Temática")
+
+    }
+
 )
 
-st.session_state.data = edited.to_dict("records")
+edited = edited[edited["Eliminar"] == False]
+
+edited = edited.drop(columns=["Eliminar"])
+
+
+# =====================================================
+# PROTEGER DATOS DE OTROS ACTORES
+# =====================================================
+
+edited_records = edited.to_dict("records")
+
+df_original = pd.DataFrame(st.session_state.data)
+
+otros = df_original[df_original["Actor"] != actor]
+
+nuevo = pd.DataFrame(edited_records)
+
+nuevo["Actor"] = actor
+
+final = pd.concat([otros, nuevo], ignore_index=True)
+
+st.session_state.data = final.to_dict("records")
 
 
 # =====================================================
@@ -381,31 +412,31 @@ def save_excel():
 
     buffer.seek(0)
 
-    upload_file(BASE_FILE, buffer.read())
+    try:
+        upload_file(BASE_FILE, buffer.read())
+
+    except:
+        st.warning("No se pudo guardar en Dropbox")
 
 
 if save:
 
     save_excel()
-
     st.success("Guardado correctamente")
 
 
 if send:
 
     save_excel()
-
     st.success("Reporte enviado")
 
 
 # =====================================================
-# AUTOGUARDADO
+# AUTOSAVE
 # =====================================================
 
 if "last_save" not in st.session_state:
-
     st.session_state.last_save = time.time()
-
 
 if time.time() - st.session_state.last_save > 120:
 
