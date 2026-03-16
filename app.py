@@ -1,139 +1,118 @@
+# =========================================================
+# IMPORTACIONES
+# =========================================================
+
 import streamlit as st
 import pandas as pd
-import dropbox
 import bcrypt
-import plotly.express as px
-from datetime import datetime
 import io
+import time
+
+from services.dropbox_service import download_file, upload_file
+from services.lock_service import check_lock, create_lock, delete_lock
 
 
-# -----------------------------------
-# CONFIG
-# -----------------------------------
+# =========================================================
+# CONFIGURACIÓN
+# =========================================================
 
 st.set_page_config(
-    page_title="Tablero de Implementación PNA",
+    page_title="Tablero Implementación PNA",
     layout="wide"
 )
 
-# -----------------------------------
+BASE_FILE = "/base.xlsx"
+
+
+# =========================================================
+# ESTILO MODERNO
+# =========================================================
+
+st.markdown("""
+<style>
+
+.main-card{
+background:#f7f9fc;
+padding:25px;
+border-radius:10px;
+margin-bottom:20px;
+}
+
+.header-title{
+font-size:32px;
+font-weight:700;
+}
+
+.sub-title{
+color:#6c757d;
+margin-bottom:20px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
 # CARGAR USUARIOS
-# -----------------------------------
+# =========================================================
 
-users = pd.read_excel("www/user-pass.xlsx")
-user_actor = pd.read_excel("www/user-act.xlsx")
+users_df = pd.read_excel("www/user-pass.xlsx")
 
 
-# -----------------------------------
-# SESSION STATE
-# -----------------------------------
+# =========================================================
+# HASH TEMPORAL
+# =========================================================
+
+if "hashed_users" not in st.session_state:
+
+    hashed_users = {}
+
+    for _, row in users_df.iterrows():
+
+        hashed = bcrypt.hashpw(str(row["password"]).encode(), bcrypt.gensalt())
+
+        hashed_users[row["user"]] = {
+            "hash": hashed,
+            "permissions": row["permissions"]
+        }
+
+    st.session_state.hashed_users = hashed_users
+
+
+# =========================================================
+# LOGIN
+# =========================================================
 
 if "login" not in st.session_state:
-    st.session_state["login"] = False
+    st.session_state.login = False
 
-if "user" not in st.session_state:
-    st.session_state["user"] = None
-
-
-# -----------------------------------
-# DROPBOX
-# -----------------------------------
-
-DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
-dbx = dropbox.Dropbox(DROPBOX_TOKEN)
-
-BASE_PATH = "/tablero_prueba/base.xlsx"
-LOCK_FILE = "/tablero_prueba/lock.txt"
-
-
-# -----------------------------------
-# FUNCIONES DROPBOX
-# -----------------------------------
-
-def read_dropbox_excel(path):
-
-    metadata, res = dbx.files_download(path)
-
-    return pd.read_excel(res.content)
-
-
-def upload_dropbox_excel(df, path):
-
-    buffer = io.BytesIO()
-
-    df.to_excel(buffer, index=False)
-
-    buffer.seek(0)
-
-    dbx.files_upload(
-        buffer.read(),
-        path,
-        mode=dropbox.files.WriteMode.overwrite
-    )
-
-
-# -----------------------------------
-# SISTEMA LOCK
-# -----------------------------------
-
-def check_lock():
-
-    try:
-        dbx.files_get_metadata(LOCK_FILE)
-        return True
-    except:
-        return False
-
-
-def create_lock(user):
-
-    dbx.files_upload(
-        user.encode(),
-        LOCK_FILE,
-        mode=dropbox.files.WriteMode.overwrite
-    )
-
-
-def remove_lock():
-
-    try:
-        dbx.files_delete_v2(LOCK_FILE)
-    except:
-        pass
-        
-# -----------------------------------
-# LOGIN
-# -----------------------------------
 
 if not st.session_state.login:
 
-    col1, col2, col3 = st.columns([1,2,1])
+    col1,col2,col3 = st.columns([1,2,1])
 
     with col2:
 
-        st.image("www/logo_tablero.png", width=250)
+        st.image("www/logo_tablero.png", width=200)
 
-        st.markdown("## Sistema Estatal Anticorrupción")
-        st.markdown("Tablero de Implementación del PNA")
+        st.title("Sistema Estatal Anticorrupción")
 
         username = st.text_input("Usuario")
+
         password = st.text_input("Contraseña", type="password")
 
-        login_button = st.button("Ingresar", use_container_width=True)
+        if st.button("Ingresar"):
 
-        if login_button:
+            if username in st.session_state.hashed_users:
 
-            user = users[users["user"] == username]
+                stored_hash = st.session_state.hashed_users[username]["hash"]
 
-            if len(user) > 0:
+                if bcrypt.checkpw(password.encode(), stored_hash):
 
-                stored_password = user.iloc[0]["password"]
+                    st.session_state.login = True
+                    st.session_state.user = username
+                    st.session_state.permission = st.session_state.hashed_users[username]["permissions"]
 
-                if password == stored_password:
-
-                    st.session_state["login"] = True
-                    st.session_state["user"] = username
-                
                     st.rerun()
 
                 else:
@@ -145,226 +124,175 @@ if not st.session_state.login:
     st.stop()
 
 
-# -----------------------------------
-# ACTOR DEL USUARIO
-# -----------------------------------
-
-actor = user_actor[
-    user_actor["user"] == st.session_state.user
-]["act"].values[0]
-
-
-# -----------------------------------
+# =========================================================
 # HEADER
-# -----------------------------------
+# =========================================================
 
-col1,col2 = st.columns([1,4])
+st.image("www/logo_tablero.png", width=150)
 
-with col1:
-    st.image("www/logo_tablero.png", width=180)
+st.markdown('<div class="header-title">Reporte de Acciones 2025</div>', unsafe_allow_html=True)
 
-with col2:
-    st.title("Reporte de Acciones 2025")
-    st.caption("Programa de Implementación del PNA")
-
-if st.button("Cerrar sesión"):
-
-    remove_lock()
-
-    st.session_state.login = False
-    st.session_state.user = None
-
-    st.rerun()
-
-st.divider()
+st.markdown('<div class="sub-title">Programa de Implementación del PNA</div>', unsafe_allow_html=True)
 
 
-# -----------------------------------
-# BLOQUEO SIMULTÁNEO
-# -----------------------------------
+# =========================================================
+# ACTOR AUTOMÁTICO
+# =========================================================
+
+actores_df = pd.read_excel("www/user-act.xlsx")
+
+actor_usuario = actores_df[actores_df["user"] == st.session_state.user]
+
+if len(actor_usuario) > 0:
+    actor = actor_usuario.iloc[0]["actor"]
+else:
+    actor = "Sin actor"
+
+
+# =========================================================
+# BLOQUEO MULTIUSUARIO
+# =========================================================
 
 if check_lock():
-
-    st.error("⚠️ Otro usuario está editando el sistema en este momento.")
-    st.stop()
-
-create_lock(st.session_state.user)
+    st.warning("⚠ Otro usuario está editando el sistema")
+else:
+    create_lock(st.session_state.user)
 
 
-# -----------------------------------
-# CARGAR ESTRUCTURA
-# -----------------------------------
+# =========================================================
+# CARGAR BASE DESDE DROPBOX
+# =========================================================
+
+def load_base():
+
+    try:
+
+        data = download_file(BASE_FILE)
+
+        df = pd.read_excel(io.BytesIO(data))
+
+        return df
+
+    except:
+
+        return pd.DataFrame()
+
+
+df = load_base()
+
+
+if "table_data" not in st.session_state:
+
+    if not df.empty:
+        st.session_state.table_data = df.to_dict("records")
+    else:
+        st.session_state.table_data = []
+
+
+# =========================================================
+# BOTONES
+# =========================================================
+
+c1,c2,c3 = st.columns(3)
+
+with c1:
+    add_action = st.button("+ Agregar Acción", use_container_width=True)
+
+with c2:
+    save_draft = st.button("Guardar Borrador", use_container_width=True)
+
+with c3:
+    send = st.button("Enviar", use_container_width=True)
+
+
+# =========================================================
+# ESTRATEGIAS
+# =========================================================
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
-actores = pd.read_excel("www/pi-actores.xlsx")
 
-estructura = actores.merge(
-    alineacion,
-    on="Línea de acción",
-    how="left"
-)
+estrategias = alineacion["Estrategia"].unique()
 
-data = read_dropbox_excel(BASE_PATH)
+estrategia = st.selectbox("Estrategia", estrategias)
 
+lineas = alineacion[alineacion["Estrategia"] == estrategia]["Linea"].unique()
 
-# -----------------------------------
-# KPIs
-# -----------------------------------
-
-total = len(data)
-
-reportadas = (data["Acción reportada"] != "Por reportar").sum()
-
-avance = round(reportadas/total*100,2)
-
-k1,k2,k3 = st.columns(3)
-
-k1.metric("Total acciones", total)
-k2.metric("Acciones reportadas", reportadas)
-k3.metric("Avance %", avance)
-
-st.divider()
+linea = st.selectbox("Línea de acción", lineas)
 
 
-# -----------------------------------
-# RANKING
-# -----------------------------------
+# =========================================================
+# AGREGAR ACCIÓN
+# =========================================================
 
-ranking = (
-    data.groupby("Actor")
-    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean()*100)
-    .reset_index(name="avance")
-)
+if add_action:
 
-fig = px.bar(
-    ranking,
-    x="Actor",
-    y="avance",
-    title="Ranking de avance por institución",
-    color="avance",
-    color_continuous_scale="Blues"
-)
+    st.session_state.table_data.append({
 
-st.plotly_chart(fig, use_container_width=True)
+        "Actor":actor,
+        "Estrategia":estrategia,
+        "Linea":linea,
+        "Accion":"",
+        "Inicio":"",
+        "Fin":"",
+        "Tipo":"",
+        "Tematica":""
 
-st.divider()
-
-
-# -----------------------------------
-# FILTRAR ACTOR
-# -----------------------------------
-
-df_actor = estructura[
-    estructura["Actor"] == actor
-]
-
-estrategias = sorted(df_actor["Estrategia"].unique())
-
-estrategia = st.selectbox(
-    "Estrategia",
-    estrategias
-)
-
-df_est = df_actor[
-    df_actor["Estrategia"] == estrategia
-]
-
-lineas = sorted(df_est["Línea de acción"].unique())
-
-linea = st.selectbox(
-    "Línea de acción",
-    lineas
-)
-
-df_linea = data[
-    (data["Actor"] == actor) &
-    (data["Línea de acción"] == linea)
-]
-
-st.divider()
-
-# -----------------------------------
-# TABLA DE ACCIONES
-# -----------------------------------
-
-import pandas as pd
-
-# inicializar tabla en sesión
-if "acciones" not in st.session_state:
-
-    st.session_state.acciones = pd.DataFrame({
-        "Estrategia": [""],
-        "Línea de Acción": [""],
-        "Acción": [""],
-        "Inicio": [""],
-        "Fin": [""],
-        "Tipo de Acción": [""],
-        "Temática": [""]
     })
 
 
-# botones superiores
-col1,col2,col3 = st.columns([1,1,1])
+# =========================================================
+# TABLA EDITABLE
+# =========================================================
 
-with col1:
-    if st.button("+ Agregar Acción"):
+df_table = pd.DataFrame(st.session_state.table_data)
 
-        nueva = pd.DataFrame({
-            "Estrategia": [""],
-            "Línea de Acción": [""],
-            "Acción": [""],
-            "Inicio": [""],
-            "Fin": [""],
-            "Tipo de Acción": [""],
-            "Temática": [""]
-        })
-
-        st.session_state.acciones = pd.concat(
-            [st.session_state.acciones, nueva],
-            ignore_index=True
-        )
-
-        st.rerun()
-
-with col2:
-    guardar = st.button("Guardar Borrador")
-
-with col3:
-    enviar = st.button("Enviar")
-
-
-st.divider()
-
-
-# tabla editable
-tabla = st.data_editor(
-    st.session_state.acciones,
-    num_rows="dynamic",
-    use_container_width=True
+edited = st.data_editor(
+    df_table,
+    use_container_width=True,
+    num_rows="dynamic"
 )
 
-st.session_state.acciones = tabla
+st.session_state.table_data = edited.to_dict("records")
 
 
-# -----------------------------------
+# =========================================================
 # GUARDAR
-# -----------------------------------
+# =========================================================
 
-if guardar:
+def save_excel():
 
-    upload_dropbox_excel(
-        st.session_state.acciones,
-        BASE_PATH
-    )
+    df_save = pd.DataFrame(st.session_state.table_data)
 
+    buffer = io.BytesIO()
+
+    df_save.to_excel(buffer, index=False)
+
+    buffer.seek(0)
+
+    upload_file(BASE_FILE, buffer.read())
+
+
+if save_draft:
+    save_excel()
     st.success("Guardado correctamente")
 
 
-if enviar:
+if send:
+    save_excel()
+    st.success("Reporte enviado")
 
-    upload_dropbox_excel(
-        st.session_state.acciones,
-        BASE_PATH
-    )
 
-    st.success("Acciones enviadas")
+# =========================================================
+# AUTOGUARDADO
+# =========================================================
+
+if "last_save" not in st.session_state:
+    st.session_state.last_save = time.time()
+
+if time.time() - st.session_state.last_save > 120:
+
+    save_excel()
+
+    st.session_state.last_save = time.time()
+
+    st.success("Guardado automático realizado")
