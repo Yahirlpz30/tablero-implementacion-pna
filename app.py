@@ -4,11 +4,8 @@ import plotly.express as px
 from datetime import datetime
 
 from services.dropbox_service import read_excel_dropbox, upload_excel_dropbox
+from services.lock_service import check_lock, create_lock, remove_lock
 
-
-# =====================================
-# Configuración visual de la app
-# =====================================
 
 st.set_page_config(
     page_title="Tablero de Implementación",
@@ -16,61 +13,81 @@ st.set_page_config(
     page_icon="www/favicon.png"
 )
 
-# Logo
 st.image("www/logo_tablero.png", width=300)
 
-st.title("Tablero de Implementación de la Política Nacional Anticorrupción")
+# LOGIN
 
-st.markdown("---")
+users = pd.read_excel("www/user-pass.xlsx")
+user_act = pd.read_excel("www/user-act.xlsx")
 
+if "logged" not in st.session_state:
+    st.session_state.logged = False
 
-# =====================================
-# Cargar datos desde Dropbox
-# =====================================
+if not st.session_state.logged:
+
+    st.title("Inicio de sesión")
+
+    user = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+
+    if st.button("Ingresar"):
+
+        check = users[
+            (users["user"] == user) &
+            (users["password"] == password)
+        ]
+
+        if len(check) > 0:
+
+            st.session_state.logged = True
+            st.session_state.user = user
+
+            actor = user_act[user_act["user"] == user]["act"].values[0]
+
+            st.session_state.actor = actor
+
+            st.rerun()
+
+        else:
+
+            st.error("Usuario o contraseña incorrectos")
+
+    st.stop()
+
 
 @st.cache_data
 def load_data():
     return read_excel_dropbox("/tablero_prueba/base.xlsx")
 
-try:
+data = load_data()
 
-    data = load_data()
+actor_usuario = st.session_state.actor
 
-except Exception as e:
+st.title("Tablero de Implementación")
 
-    st.error("Error cargando datos desde Dropbox")
-    st.stop()
+st.write("Institución:", actor_usuario)
 
 
-# =====================================
 # KPIs
-# =====================================
 
-total_acciones = len(data)
+total = len(data)
 
-acciones_reportadas = (data["Acción reportada"] != "Por reportar").sum()
+reportadas = (data["Acción reportada"] != "Por reportar").sum()
 
-avance = round((acciones_reportadas / total_acciones) * 100, 2)
+avance = round((reportadas / total) * 100, 2)
 
 k1, k2, k3 = st.columns(3)
 
-k1.metric("Total acciones", total_acciones)
-
-k2.metric("Acciones reportadas", acciones_reportadas)
-
-k3.metric("Avance (%)", avance)
+k1.metric("Total acciones", total)
+k2.metric("Acciones reportadas", reportadas)
+k3.metric("Avance %", avance)
 
 
-st.markdown("---")
-
-
-# =====================================
-# Ranking de instituciones
-# =====================================
+# Ranking
 
 ranking = (
     data.groupby("Actor")
-    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean() * 100)
+    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean()*100)
     .reset_index(name="avance")
 )
 
@@ -78,119 +95,90 @@ fig = px.bar(
     ranking,
     x="Actor",
     y="avance",
-    title="Ranking de avance por institución",
-    color="avance",
-    color_continuous_scale="Blues"
+    title="Ranking de avance",
+    color="avance"
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
 
-st.markdown("---")
+# FILTROS
 
-
-# =====================================
-# Filtros
-# =====================================
-
-st.subheader("Captura de acciones")
-
-col1, col2, col3 = st.columns(3)
-
-actores = sorted(data["Actor"].unique())
-
-actor = col1.selectbox(
-    "Institución",
-    actores
-)
-
-df_actor = data[data["Actor"] == actor]
-
+df_actor = data[data["Actor"] == actor_usuario]
 
 estrategias = sorted(df_actor["No. Estrategia"].unique())
 
-estrategia = col2.selectbox(
-    "Estrategia",
-    estrategias
-)
+estrategia = st.selectbox("Estrategia", estrategias)
 
 df_estrategia = df_actor[
     df_actor["No. Estrategia"] == estrategia
 ]
 
-
 lineas = sorted(df_estrategia["No. Línea de acción"].unique())
 
-linea = col3.selectbox(
-    "Línea de acción",
-    lineas
-)
+linea = st.selectbox("Línea de acción", lineas)
 
 df_linea = df_estrategia[
     df_estrategia["No. Línea de acción"] == linea
 ]
 
 
-st.markdown("---")
+# TABLA EDITABLE
 
-
-# =====================================
-# Tabla editable
-# =====================================
-
-st.subheader("Registro de acciones")
-
-edited_df = st.data_editor(
+edited = st.data_editor(
     df_linea,
     num_rows="dynamic",
     use_container_width=True
 )
 
 
-# =====================================
-# Guardar cambios
-# =====================================
+# GUARDAR
 
 if st.button("Guardar cambios"):
 
-    with st.spinner("Guardando información..."):
+    if check_lock():
 
-        try:
+        st.warning("Otro usuario está guardando datos. Intente nuevamente.")
 
-            restante = data[
-                data["No. Línea de acción"] != linea
-            ]
+        st.stop()
 
-            nuevo_df = pd.concat(
-                [restante, edited_df]
-            )
+    create_lock()
 
-            upload_excel_dropbox(
-                nuevo_df,
-                "/tablero_prueba/base.xlsx"
-            )
+    try:
 
-            # snapshot histórico
+        restante = data[
+            data["No. Línea de acción"] != linea
+        ]
 
-            snapshot_name = (
-                "/tablero_prueba/snaps/"
-                + actor
-                + "_"
-                + datetime.now().strftime("%Y%m%d_%H%M")
-                + ".xlsx"
-            )
+        nuevo = pd.concat([restante, edited])
 
-            upload_excel_dropbox(
-                edited_df,
-                snapshot_name
-            )
+        upload_excel_dropbox(
+            nuevo,
+            "/tablero_prueba/base.xlsx"
+        )
 
-            st.success("Información guardada correctamente")
+        snapshot = (
+            "/tablero_prueba/snaps/"
+            + actor_usuario
+            + "_"
+            + datetime.now().strftime("%Y%m%d_%H%M")
+            + ".xlsx"
+        )
 
-            st.cache_data.clear()
+        upload_excel_dropbox(
+            edited,
+            snapshot
+        )
 
-        except Exception as e:
+        st.success("Información guardada correctamente")
 
-            st.error("Error al guardar los datos")
+        st.cache_data.clear()
 
-            st.write(e)
+    except Exception as e:
+
+        st.error("Error guardando información")
+        st.write(e)
+
+    finally:
+
+        remove_lock()
