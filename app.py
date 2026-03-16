@@ -47,38 +47,87 @@ def upload_dropbox_excel(df, path):
 # LOGIN
 # -----------------------------------
 
+import hashlib
+
 users = pd.read_excel("www/user-pass.xlsx")
 user_actor = pd.read_excel("www/user-act.xlsx")
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
-    
-st.image("www/logo_tablero.png", width=300)
 
-st.title("Sistema Estatal Anticorrupción")
-
-st.subheader("Tablero de Implementación del PNA")
-
-st.write("")
-
-username = st.text_input("Usuario")
-password = st.text_input("Contraseña", type="password")
-
+# estado de login
 if "login" not in st.session_state:
     st.session_state.login = False
 
-if st.sidebar.button("Ingresar"):
+# -------------------------------
+# DISEÑO LOGIN
+# -------------------------------
 
-    user = users[users["user"] == username]
+st.markdown(
+"""
+<style>
 
-    if len(user) > 0:
-        stored = user.iloc[0]["password"]
+.main-container{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:80vh;
+}
 
-        if hash_password(password) == stored:
-            st.session_state.login = True
-            st.session_state.user = username
+.login-card{
+    background:white;
+    padding:40px;
+    border-radius:10px;
+    width:420px;
+    text-align:center;
+    box-shadow:0px 4px 20px rgba(0,0,0,0.15);
+}
+
+</style>
+""",
+unsafe_allow_html=True
+)
 
 if not st.session_state.login:
+
+    st.markdown('<div class="main-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+
+    st.image("www/logo_tablero.png", width=220)
+
+    st.markdown("### Sistema Estatal Anticorrupción")
+    st.markdown("Tablero de Implementación del PNA")
+
+    st.write("")
+
+    username = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+
+    login_button = st.button("Ingresar", use_container_width=True)
+
+    if login_button:
+
+        user = users[users["user"] == username]
+
+        if len(user) > 0:
+
+            stored_password = user.iloc[0]["password"]
+
+            if hash_password(password) == stored_password:
+
+                st.session_state.login = True
+                st.session_state.user = username
+                st.rerun()
+
+            else:
+                st.error("Contraseña incorrecta")
+
+        else:
+            st.error("Usuario no encontrado")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     st.stop()
 
 # -----------------------------------
