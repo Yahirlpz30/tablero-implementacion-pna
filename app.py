@@ -17,6 +17,14 @@ st.set_page_config(
 )
 
 # -----------------------------------
+# CARGAR USUARIOS
+# -----------------------------------
+
+users = pd.read_excel("www/user-pass.xlsx")
+user_actor = pd.read_excel("www/user-act.xlsx")
+
+
+# -----------------------------------
 # SESSION STATE
 # -----------------------------------
 
@@ -92,16 +100,7 @@ def remove_lock():
         dbx.files_delete_v2(LOCK_FILE)
     except:
         pass
-
-
-# -----------------------------------
-# CARGAR USUARIOS
-# -----------------------------------
-
-users = pd.read_excel("www/user-pass.xlsx")
-user_actor = pd.read_excel("www/user-act.xlsx")
-
-
+        
 # -----------------------------------
 # LOGIN
 # -----------------------------------
