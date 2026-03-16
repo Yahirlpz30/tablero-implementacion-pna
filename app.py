@@ -249,9 +249,9 @@ estrategias = alineacion["Estrategia"].unique()
 
 lineas = alineacion["Línea de acción"].unique()
 
-tipo_lista = tipo_accion["tipo"].tolist()
+tipo_lista = tipo_accion.iloc[:,0].dropna().tolist()
 
-tematica_lista = tematicas["tematica"].tolist()
+tematica_lista = tematicas.iloc[:,0].dropna().tolist()
 
 
 # -----------------------------
