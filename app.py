@@ -85,7 +85,9 @@ if "login" not in st.session_state:
 
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
-
+    
+if "ultimo_guardado" not in st.session_state:
+    st.session_state.ultimo_guardado = None
 
 def validar(usuario, password):
 
