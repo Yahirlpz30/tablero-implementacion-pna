@@ -8,146 +8,133 @@ from services.dropbox_service import download_file, upload_file
 from services.lock_service import check_lock, create_lock
 
 
-# =====================================================
-# CONFIG
-# =====================================================
+# ======================================================
+# CONFIGURACIÓN
+# ======================================================
 
 st.set_page_config(
     page_title="Tablero Implementación PNA",
     layout="wide"
 )
 
-BASE_FILE = "/base.xlsx"
+BASE_FILE = "/base_pna.xlsx"
 
 
-# =====================================================
-# FUNCION BLINDADA PARA COLUMNAS
-# =====================================================
+# ======================================================
+# FUNCION PARA DETECTAR COLUMNAS
+# ======================================================
 
-def find_column(df, posibles):
+def find_column(df, keywords):
 
     for c in df.columns:
 
-        nombre = c.lower().strip()
+        name = c.lower()
 
-        for p in posibles:
+        for k in keywords:
 
-            if p in nombre:
+            if k in name:
 
                 return c
 
     return None
 
 
-# =====================================================
-# CARGAR USUARIOS
-# =====================================================
-
-users_df = pd.read_excel("www/user-pass.xlsx")
-
-user_col = find_column(users_df, ["user"])
-pass_col = find_column(users_df, ["pass"])
-perm_col = find_column(users_df, ["perm"])
-
-
-# =====================================================
-# HASH TEMPORAL
-# =====================================================
-
-if "hashed_users" not in st.session_state:
-
-    hashed_users = {}
-
-    for _, row in users_df.iterrows():
-
-        hashed = bcrypt.hashpw(str(row[pass_col]).encode(), bcrypt.gensalt())
-
-        hashed_users[row[user_col]] = {
-            "hash": hashed,
-            "perm": row[perm_col]
-        }
-
-    st.session_state.hashed_users = hashed_users
-
-
-# =====================================================
+# ======================================================
 # LOGIN
-# =====================================================
+# ======================================================
+
+users = pd.read_excel("www/user-pass.xlsx")
+
+user_col = find_column(users, ["user"])
+pass_col = find_column(users, ["pass"])
+perm_col = find_column(users, ["perm"])
+
 
 if "login" not in st.session_state:
     st.session_state.login = False
 
 
+if "hash_users" not in st.session_state:
+
+    hashed = {}
+
+    for _, row in users.iterrows():
+
+        hashed[row[user_col]] = bcrypt.hashpw(
+            str(row[pass_col]).encode(),
+            bcrypt.gensalt()
+        )
+
+    st.session_state.hash_users = hashed
+
+
 if not st.session_state.login:
 
-    col1,col2,col3 = st.columns([1,2,1])
+    st.title("Sistema Estatal Anticorrupción")
 
-    with col2:
+    username = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
 
-        st.title("Sistema Estatal Anticorrupción")
+    if st.button("Ingresar"):
 
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
+        if username in st.session_state.hash_users:
 
-        if st.button("Ingresar"):
+            if bcrypt.checkpw(
+                password.encode(),
+                st.session_state.hash_users[username]
+            ):
 
-            if username in st.session_state.hashed_users:
+                st.session_state.login = True
+                st.session_state.user = username
 
-                stored_hash = st.session_state.hashed_users[username]["hash"]
-
-                if bcrypt.checkpw(password.encode(), stored_hash):
-
-                    st.session_state.login = True
-                    st.session_state.user = username
-
-                    st.rerun()
-
-                else:
-                    st.error("Contraseña incorrecta")
+                st.rerun()
 
             else:
-                st.error("Usuario no encontrado")
+
+                st.error("Contraseña incorrecta")
+
+        else:
+
+            st.error("Usuario no encontrado")
 
     st.stop()
 
 
-# =====================================================
-# DETECTAR ACTOR
-# =====================================================
+# ======================================================
+# ACTOR AUTOMÁTICO
+# ======================================================
 
-act_df = pd.read_excel("www/user-act.xlsx")
+actores = pd.read_excel("www/user-act.xlsx")
 
-user_col_act = find_column(act_df, ["user"])
-actor_col = find_column(act_df, ["act","actor","institucion"])
+user_col_act = find_column(actores, ["user"])
+actor_col = find_column(actores, ["act","actor"])
 
 
 actor = "Sin actor"
 
-if user_col_act and actor_col:
+fila = actores[actores[user_col_act] == st.session_state.user]
 
-    fila = act_df[act_df[user_col_act] == st.session_state.user]
+if len(fila) > 0:
 
-    if len(fila) > 0:
-
-        actor = fila.iloc[0][actor_col]
+    actor = fila.iloc[0][actor_col]
 
 
-# =====================================================
+# ======================================================
 # BLOQUEO MULTIUSUARIO
-# =====================================================
+# ======================================================
 
 if check_lock():
 
-    st.warning("⚠ Otro usuario está editando el sistema")
+    st.warning("⚠ Otro usuario está editando")
 
 else:
 
     create_lock(st.session_state.user)
 
 
-# =====================================================
-# CARGAR BASE DESDE DROPBOX
-# =====================================================
+# ======================================================
+# CARGAR BASE
+# ======================================================
 
 def load_base():
 
@@ -166,65 +153,107 @@ def load_base():
 
 df = load_base()
 
-if "table_data" not in st.session_state:
+if "data" not in st.session_state:
 
     if not df.empty:
 
-        st.session_state.table_data = df.to_dict("records")
+        st.session_state.data = df.to_dict("records")
 
     else:
 
-        st.session_state.table_data = []
+        st.session_state.data = []
 
 
-# =====================================================
-# ESTRATEGIAS
-# =====================================================
+# ======================================================
+# CARGAR ALINEACIÓN
+# ======================================================
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 
 estrategia_col = find_column(alineacion, ["estrategia"])
-linea_col = find_column(alineacion, ["linea"])
+linea_col = find_column(alineacion, ["linea","línea"])
+accion_col = find_column(alineacion, ["accion"])
 
 
-estrategias = alineacion[estrategia_col].unique()
+# ======================================================
+# INTERFAZ
+# ======================================================
 
-estrategia = st.selectbox("Estrategia", estrategias)
-
-
-lineas = alineacion[alineacion[estrategia_col] == estrategia][linea_col].unique()
-
-linea = st.selectbox("Linea de acción", lineas)
+st.title("Reporte de Acciones 2025")
+st.caption("Programa de Implementación del PNA")
 
 
-# =====================================================
+col1,col2,col3 = st.columns(3)
+
+with col1:
+
+    estrategia = st.selectbox(
+        "Estrategia",
+        alineacion[estrategia_col].unique()
+    )
+
+
+lineas = alineacion.loc[
+    alineacion[estrategia_col] == estrategia,
+    linea_col
+].unique()
+
+
+with col2:
+
+    linea = st.selectbox(
+        "Línea de acción",
+        lineas
+    )
+
+
+acciones = alineacion.loc[
+    alineacion[linea_col] == linea,
+    accion_col
+]
+
+
+with col3:
+
+    accion = st.selectbox(
+        "Acción",
+        acciones
+    )
+
+
+# ======================================================
 # BOTONES
-# =====================================================
+# ======================================================
 
 c1,c2,c3 = st.columns(3)
 
 with c1:
+
     add = st.button("+ Agregar acción")
 
+
 with c2:
+
     save = st.button("Guardar")
 
+
 with c3:
+
     send = st.button("Enviar")
 
 
-# =====================================================
+# ======================================================
 # AGREGAR FILA
-# =====================================================
+# ======================================================
 
 if add:
 
-    st.session_state.table_data.append({
+    st.session_state.data.append({
 
         "Actor":actor,
         "Estrategia":estrategia,
         "Linea":linea,
-        "Accion":"",
+        "Accion":accion,
         "Inicio":"",
         "Fin":"",
         "Tipo":"",
@@ -233,30 +262,30 @@ if add:
     })
 
 
-# =====================================================
+# ======================================================
 # TABLA
-# =====================================================
+# ======================================================
 
-table_df = pd.DataFrame(st.session_state.table_data)
+df_table = pd.DataFrame(st.session_state.data)
 
 edited = st.data_editor(
 
-    table_df,
-    use_container_width=True,
-    num_rows="dynamic"
+    df_table,
+    num_rows="dynamic",
+    use_container_width=True
 
 )
 
-st.session_state.table_data = edited.to_dict("records")
+st.session_state.data = edited.to_dict("records")
 
 
-# =====================================================
+# ======================================================
 # GUARDAR
-# =====================================================
+# ======================================================
 
 def save_excel():
 
-    df_save = pd.DataFrame(st.session_state.table_data)
+    df_save = pd.DataFrame(st.session_state.data)
 
     buffer = io.BytesIO()
 
@@ -281,9 +310,9 @@ if send:
     st.success("Reporte enviado")
 
 
-# =====================================================
+# ======================================================
 # AUTOGUARDADO
-# =====================================================
+# ======================================================
 
 if "last_save" not in st.session_state:
 
