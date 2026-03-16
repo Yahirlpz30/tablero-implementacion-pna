@@ -231,19 +231,64 @@ st.caption("Programa de Implementación del PNA")
 
 
 # =====================================================
+# SELECTORES
+# =====================================================
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+
+    estrategia = st.selectbox(
+        "Estrategia",
+        alineacion[estrategia_col].unique()
+    )
+
+
+lineas = alineacion.loc[
+    alineacion[estrategia_col] == estrategia,
+    linea_col
+].unique()
+
+
+with col2:
+
+    linea = st.selectbox(
+        "Línea de acción",
+        lineas
+    )
+
+
+acciones = alineacion.loc[
+    alineacion[linea_col] == linea,
+    linea_col
+]
+
+
+with col3:
+
+    accion = st.selectbox(
+        "Acción",
+        acciones
+    )
+
+
+st.divider()
+
+
+# =====================================================
 # BOTONES
 # =====================================================
 
-col1,col2,col3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     add = st.button("➕ Agregar Acción")
 
 with col2:
-    save = st.button("💾 Guardar Borrador")
+    save = st.button(" Guardar Borrador")
 
 with col3:
-    send = st.button("📤 Enviar")
+    send = st.button(" Enviar")
 
 
 # =====================================================
