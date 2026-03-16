@@ -283,59 +283,88 @@ df_linea = data[
 
 st.divider()
 
-
 # -----------------------------------
-# TABLA EDITABLE
+# TABLA DE ACCIONES
 # -----------------------------------
 
-edited = st.data_editor(
-    df_linea,
+import pandas as pd
+
+# inicializar tabla en sesión
+if "acciones" not in st.session_state:
+
+    st.session_state.acciones = pd.DataFrame({
+        "Estrategia": [""],
+        "Línea de Acción": [""],
+        "Acción": [""],
+        "Inicio": [""],
+        "Fin": [""],
+        "Tipo de Acción": [""],
+        "Temática": [""]
+    })
+
+
+# botones superiores
+col1,col2,col3 = st.columns([1,1,1])
+
+with col1:
+    if st.button("+ Agregar Acción"):
+
+        nueva = pd.DataFrame({
+            "Estrategia": [""],
+            "Línea de Acción": [""],
+            "Acción": [""],
+            "Inicio": [""],
+            "Fin": [""],
+            "Tipo de Acción": [""],
+            "Temática": [""]
+        })
+
+        st.session_state.acciones = pd.concat(
+            [st.session_state.acciones, nueva],
+            ignore_index=True
+        )
+
+        st.rerun()
+
+with col2:
+    guardar = st.button("Guardar Borrador")
+
+with col3:
+    enviar = st.button("Enviar")
+
+
+st.divider()
+
+
+# tabla editable
+tabla = st.data_editor(
+    st.session_state.acciones,
     num_rows="dynamic",
     use_container_width=True
 )
 
+st.session_state.acciones = tabla
+
 
 # -----------------------------------
-# BOTONES
+# GUARDAR
 # -----------------------------------
 
-col1,col2 = st.columns(2)
+if guardar:
 
-with col1:
+    upload_dropbox_excel(
+        st.session_state.acciones,
+        BASE_PATH
+    )
 
-    if st.button("Guardar borrador"):
-
-        restante = data[
-            ~(
-                (data["Actor"] == actor) &
-                (data["Línea de acción"] == linea)
-            )
-        ]
-
-        nuevo = pd.concat([restante, edited])
-
-        upload_dropbox_excel(nuevo, BASE_PATH)
-
-        remove_lock()
-
-        st.success("Guardado correctamente")
+    st.success("Guardado correctamente")
 
 
-with col2:
+if enviar:
 
-    if st.button("Enviar"):
+    upload_dropbox_excel(
+        st.session_state.acciones,
+        BASE_PATH
+    )
 
-        restante = data[
-            ~(
-                (data["Actor"] == actor) &
-                (data["Línea de acción"] == linea)
-            )
-        ]
-
-        nuevo = pd.concat([restante, edited])
-
-        upload_dropbox_excel(nuevo, BASE_PATH)
-
-        remove_lock()
-
-        st.success("Acciones enviadas")
+    st.success("Acciones enviadas")
