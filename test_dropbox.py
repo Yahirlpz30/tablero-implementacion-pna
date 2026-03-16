@@ -3,7 +3,7 @@ import dropbox
 
 st.title("Prueba conexión Dropbox")
 
-token = st.secrets["DROPBPX_TOKEN"]
+token = st.secrets["DROPBOX_TOKEN"]
 dbx = dropbox.Dropbox(token)
 
 files = dbx.files_list_folder("").entries
