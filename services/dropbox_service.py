@@ -1,39 +1,46 @@
-import streamlit as st
 import dropbox
-import pandas as pd
-from io import BytesIO
+import streamlit as st
 
 
-def connect_dropbox():
+# ======================================================
+# TOKEN
+# ======================================================
 
-    token = st.secrets["DROPBOX_TOKEN"]
-
-    dbx = dropbox.Dropbox(token)
-
-    return dbx
+DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
 
 
-def read_excel_dropbox(path):
+# ======================================================
+# CLIENTE
+# ======================================================
 
-    dbx = connect_dropbox()
+def get_client():
+
+    return dropbox.Dropbox(DROPBOX_TOKEN)
+
+
+# ======================================================
+# DESCARGAR ARCHIVO
+# ======================================================
+
+def download_file(path):
+
+    dbx = get_client()
 
     metadata, res = dbx.files_download(path)
 
-    df = pd.read_excel(BytesIO(res.content))
-
-    return df
+    return res.content
 
 
-def upload_excel_dropbox(df, path):
+# ======================================================
+# SUBIR ARCHIVO
+# ======================================================
 
-    dbx = connect_dropbox()
+def upload_file(path, data):
 
-    buffer = BytesIO()
-
-    df.to_excel(buffer, index=False)
+    dbx = get_client()
 
     dbx.files_upload(
-        buffer.getvalue(),
+        data,
         path,
         mode=dropbox.files.WriteMode.overwrite
     )
