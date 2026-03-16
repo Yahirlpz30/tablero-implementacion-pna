@@ -1,447 +1,225 @@
 import streamlit as st
 import pandas as pd
-import bcrypt
-import io
-import time
+import os
+from datetime import datetime
 
-from services.dropbox_service import download_file, upload_file
-from services.lock_service import check_lock, create_lock
+st.set_page_config(page_title="Tablero PNA", layout="wide")
 
-
-# =====================================================
-# CONFIG
-# =====================================================
-
-st.set_page_config(
-    page_title="Tablero Implementación PNA",
-    layout="wide",
-    page_icon="www/favicon.png"
-)
-
-BASE_FILE = "/base_pna.xlsx"
-
-
-# =====================================================
-# ESTILOS
-# =====================================================
-
-st.markdown("""
-<style>
-.stButton>button {
-    background-color:#0b7c83;
-    color:white;
-    border-radius:6px;
-    height:40px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# =====================================================
-# FUNCION BUSCAR COLUMNA
-# =====================================================
-
-def find_column(df, keys):
-
-    for c in df.columns:
-
-        name = c.lower()
-
-        for k in keys:
-
-            if k in name:
-                return c
-
-    return None
-
-
-# =====================================================
-# CARGAR EXCEL
-# =====================================================
+# =========================================================
+# FUNCION CARGAR EXCEL
+# =========================================================
 
 def load_excel(path):
-
     try:
         return pd.read_excel(path)
-
     except:
         st.error(f"No se pudo cargar {path}")
-        st.stop()
+        return pd.DataFrame()
 
-
-# =====================================================
-# LOGIN
-# =====================================================
+# =========================================================
+# CARGAR ARCHIVOS
+# =========================================================
 
 users = load_excel("www/user-pass.xlsx")
+user_act = load_excel("www/user-act.xlsx")
+pi_actores = load_excel("www/pi-actores.xlsx")
+alineacion = load_excel("www/alineacion_pi.xlsx")
 
-user_col = find_column(users, ["user"])
-pass_col = find_column(users, ["pass"])
+# =========================================================
+# LOGIN
+# =========================================================
 
-if "login" not in st.session_state:
-    st.session_state.login = False
+if "logged" not in st.session_state:
+    st.session_state.logged = False
 
-if "hash_users" not in st.session_state:
-
-    hashes = {}
-
-    for _, row in users.iterrows():
-
-        hashes[row[user_col]] = bcrypt.hashpw(
-            str(row[pass_col]).encode(),
-            bcrypt.gensalt()
-        )
-
-    st.session_state.hash_users = hashes
-
-
-if not st.session_state.login:
+if not st.session_state.logged:
 
     st.title("Sistema Estatal Anticorrupción")
+    st.subheader("Login")
 
-    username = st.text_input("Usuario")
+    user = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
-    if st.button("Ingresar"):
+    if st.button("Entrar"):
 
-        if username in st.session_state.hash_users:
+        check = users[
+            (users["user"] == user) &
+            (users["password"] == password)
+        ]
 
-            if bcrypt.checkpw(
-                password.encode(),
-                st.session_state.hash_users[username]
-            ):
+        if len(check) > 0:
 
-                st.session_state.login = True
-                st.session_state.user = username
-                st.rerun()
-
-            else:
-                st.error("Contraseña incorrecta")
+            st.session_state.logged = True
+            st.session_state.user = user
+            st.rerun()
 
         else:
-            st.error("Usuario no encontrado")
+            st.error("Usuario o contraseña incorrectos")
 
     st.stop()
 
+# =========================================================
+# DETECTAR ACTOR
+# =========================================================
 
-# =====================================================
+actor_usuario = user_act.loc[
+    user_act["user"] == st.session_state.user,
+    "act"
+].values[0]
+
+# =========================================================
+# LINEAS PERMITIDAS PARA ACTOR
+# =========================================================
+
+lineas_actor = pi_actores.loc[
+    pi_actores["Actor"].str.contains(actor_usuario),
+    "Línea de acción"
+].unique()
+
+alineacion_actor = alineacion[
+    alineacion["Línea de acción"].isin(lineas_actor)
+]
+
+# =========================================================
 # HEADER
-# =====================================================
+# =========================================================
 
-col1,col2,col3 = st.columns([1,6,2])
+col1,col2 = st.columns([6,2])
 
 with col1:
-    st.image("www/logo_tablero.png", width=110)
+    st.title("Reporte de Acciones 2025")
 
 with col2:
-    st.markdown("### Sistema Estatal Anticorrupción")
-
-with col3:
-
-    st.write(f"Usuario: *{st.session_state.user}*")
-
     if st.button("Cerrar sesión"):
-
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-
+        st.session_state.logged = False
         st.rerun()
 
 st.divider()
 
-
-# =====================================================
-# ACTOR AUTOMATICO
-# =====================================================
-
-actores = load_excel("www/user-act.xlsx")
-
-user_col_act = find_column(actores, ["user"])
-actor_col = find_column(actores, ["act"])
-
-fila = actores[actores[user_col_act] == st.session_state.user]
-
-actor = "SIN_ACTOR"
-
-if len(fila) > 0:
-    actor = fila.iloc[0][actor_col]
-
-
-# =====================================================
-# BLOQUEO MULTIUSUARIO
-# =====================================================
-
-try:
-
-    if check_lock():
-        st.warning("⚠ Otro usuario está editando")
-
-    else:
-        create_lock(st.session_state.user)
-
-except:
-    pass
-
-
-# =====================================================
-# CARGAR BASE DROPBOX
-# =====================================================
-
-def load_base():
-
-    try:
-
-        data = download_file(BASE_FILE)
-
-        return pd.read_excel(io.BytesIO(data))
-
-    except:
-
-        return pd.DataFrame()
-
-
-df = load_base()
-
-if "data" not in st.session_state:
-
-    if not df.empty:
-        st.session_state.data = df.to_dict("records")
-
-    else:
-        st.session_state.data = []
-
-
-# =====================================================
-# CARGAR CATALOGOS
-# =====================================================
-
-alineacion = load_excel("www/alineacion_pi.xlsx")
-
-tipo_df = load_excel("www/tipo_accion.xlsx")
-
-tipo_list = tipo_df.iloc[:,0].dropna().tolist()
-
-estrategia_col = find_column(alineacion, ["estrategia"])
-linea_col = find_column(alineacion, ["linea","línea"])
-
-
-# =====================================================
-# FILTRAR LINEAS POR ACTOR
-# =====================================================
-
-actores_lineas = load_excel("www/pi-actores.xlsx")
-
-actor_col_actor = find_column(actores_lineas, ["actor"])
-linea_col_actor = find_column(actores_lineas, ["linea","línea"])
-
-lineas_actor = actores_lineas.loc[
-    actores_lineas[actor_col_actor] == actor,
-    linea_col_actor
-].dropna().unique()
-
-
-# =====================================================
-# TITULO
-# =====================================================
-
-st.title("Reporte de Acciones 2025")
-st.caption("Programa de Implementación del PNA")
-st.caption(f"Institución: *{actor}*")
-
-
-# =====================================================
+# =========================================================
 # SELECTORES
-# =====================================================
+# =========================================================
+
+estrategias = alineacion_actor["Estrategia"].unique()
+
+estrategia = st.selectbox(
+    "Estrategia",
+    estrategias
+)
+
+lineas = alineacion_actor.loc[
+    alineacion_actor["Estrategia"] == estrategia,
+    "Línea de acción"
+].unique()
+
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
+
+# =========================================================
+# SESSION DATA
+# =========================================================
+
+if "tabla" not in st.session_state:
+    st.session_state.tabla = []
+
+# =========================================================
+# BOTONES
+# =========================================================
 
 col1,col2,col3 = st.columns(3)
 
 with col1:
+    if st.button("➕ Agregar Acción"):
 
-    estrategias = alineacion[estrategia_col].dropna().unique()
+        nueva = {
+            "Actor": actor_usuario,
+            "Estrategia": estrategia,
+            "Linea": linea,
+            "Accion":"",
+            "Inicio":"",
+            "Fin":"",
+            "Tipo":"",
+            "Tematica":""
+        }
 
-    estrategia = st.selectbox("Estrategia", estrategias)
-
-
-lineas = alineacion.loc[
-    (alineacion[estrategia_col] == estrategia) &
-    (alineacion[linea_col].isin(lineas_actor)),
-    linea_col
-].dropna().unique()
-
+        st.session_state.tabla.append(nueva)
 
 with col2:
+    if st.button("Guardar Borrador"):
 
-    linea = st.selectbox("Línea de acción", lineas)
+        df = pd.DataFrame(st.session_state.tabla)
 
+        nombre = f"borrador_{actor_usuario}.xlsx"
+
+        df.to_excel(nombre,index=False)
+
+        st.success("Borrador guardado")
 
 with col3:
-
-    accion = st.text_input("Acción")
-
+    if st.button("Enviar"):
+        st.success("Acciones enviadas")
 
 st.divider()
 
-
-# =====================================================
-# BOTONES
-# =====================================================
-
-col1,col2,col3 = st.columns(3)
-
-with col1:
-    add = st.button("➕ Agregar Acción")
-
-with col2:
-    save = st.button("💾 Guardar Borrador")
-
-with col3:
-    send = st.button("📤 Enviar")
-
-
-# =====================================================
-# AGREGAR FILA
-# =====================================================
-
-if add:
-
-    st.session_state.data.append({
-
-        "Actor": actor,
-        "Estrategia": estrategia,
-        "Linea": linea,
-        "Accion": accion,
-        "Inicio": "",
-        "Fin": "",
-        "Tipo": "",
-        "Tematica": ""
-
-    })
-
-
-# =====================================================
-# FILTRAR SOLO INSTITUCION
-# =====================================================
-
-df_all = pd.DataFrame(st.session_state.data)
-
-if "Actor" not in df_all.columns:
-    df_all["Actor"] = actor
-
-df_table = df_all[df_all["Actor"] == actor].copy()
-
-
-# =====================================================
-# TABLA CON BOTON ELIMINAR
-# =====================================================
-
-df_table["Eliminar"] = False
-
-edited = st.data_editor(
-
-    df_table,
-
-    num_rows="dynamic",
-
-    use_container_width=True,
-
-    height=420,
-
-    column_config={
-
-        "Eliminar": st.column_config.CheckboxColumn(
-            "🗑",
-            help="Eliminar fila"
-        ),
-
-        "Inicio": st.column_config.DateColumn(
-            "Inicio",
-            format="DD/MM/YYYY"
-        ),
-
-        "Fin": st.column_config.DateColumn(
-            "Fin",
-            format="DD/MM/YYYY"
-        ),
-
-        "Tipo": st.column_config.SelectboxColumn(
-            "Tipo de Acción",
-            options=tipo_list
-        ),
-
-        "Tematica": st.column_config.TextColumn("Temática")
-
-    }
-
-)
-
-edited = edited[edited["Eliminar"] == False]
-
-edited = edited.drop(columns=["Eliminar"])
-
-
-# =====================================================
-# PROTEGER DATOS DE OTROS ACTORES
-# =====================================================
-
-edited_records = edited.to_dict("records")
-
-df_original = pd.DataFrame(st.session_state.data)
-
-otros = df_original[df_original["Actor"] != actor]
-
-nuevo = pd.DataFrame(edited_records)
-
-nuevo["Actor"] = actor
-
-final = pd.concat([otros, nuevo], ignore_index=True)
-
-st.session_state.data = final.to_dict("records")
-
-
-# =====================================================
-# GUARDAR
-# =====================================================
-
-def save_excel():
-
-    df_save = pd.DataFrame(st.session_state.data)
-
-    buffer = io.BytesIO()
-
-    df_save.to_excel(buffer, index=False)
-
-    buffer.seek(0)
-
-    try:
-        upload_file(BASE_FILE, buffer.read())
-
-    except:
-        st.warning("No se pudo guardar en Dropbox")
-
-
-if save:
-
-    save_excel()
-    st.success("Guardado correctamente")
-
-
-if send:
-
-    save_excel()
-    st.success("Reporte enviado")
-
-
-# =====================================================
-# AUTOSAVE
-# =====================================================
-
-if "last_save" not in st.session_state:
-    st.session_state.last_save = time.time()
-
-if time.time() - st.session_state.last_save > 120:
-
-    save_excel()
-
-    st.session_state.last_save = time.time()
-
-    st.success("✔ Guardado automáticamente")
+# =========================================================
+# TABLA
+# =========================================================
+
+if len(st.session_state.tabla) > 0:
+
+    for i,row in enumerate(st.session_state.tabla):
+
+        cols = st.columns([1,2,3,2,2,2,2,1])
+
+        with cols[0]:
+            st.write(row["Estrategia"])
+
+        with cols[1]:
+            st.write(row["Linea"])
+
+        with cols[2]:
+            st.session_state.tabla[i]["Accion"] = st.text_input(
+                "Acción",
+                row["Accion"],
+                key=f"accion_{i}"
+            )
+
+        with cols[3]:
+            st.session_state.tabla[i]["Inicio"] = st.text_input(
+                "Inicio",
+                row["Inicio"],
+                placeholder="dd/mm/aaaa",
+                key=f"inicio_{i}"
+            )
+
+        with cols[4]:
+            st.session_state.tabla[i]["Fin"] = st.text_input(
+                "Fin",
+                row["Fin"],
+                placeholder="dd/mm/aaaa",
+                key=f"fin_{i}"
+            )
+
+        with cols[5]:
+            st.session_state.tabla[i]["Tipo"] = st.selectbox(
+                "Tipo de Acción",
+                ["","Capacitación","Diagnóstico","Sistema","Norma","Convenio"],
+                key=f"tipo_{i}"
+            )
+
+        with cols[6]:
+            st.session_state.tabla[i]["Tematica"] = st.text_input(
+                "Temática",
+                row["Tematica"],
+                key=f"tema_{i}"
+            )
+
+        with cols[7]:
+            if st.button("🗑",key=f"del{i}"):
+
+                st.session_state.tabla.pop(i)
+                st.rerun()
+
+        st.divider()
