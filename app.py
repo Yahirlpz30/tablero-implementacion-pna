@@ -71,26 +71,37 @@ def validar(user,password):
 
 if not st.session_state.login:
 
-    st.image("www/logo_tablero.png",width=150)
-    st.title("Sistema Estatal Anticorrupción")
+    logo = "www/logo_tablero.png"
+
+if os.path.exists(logo):
+    st.image(logo, width=220)
+
+st.markdown("""
+<h1 style='
+font-family: Arial, Helvetica, sans-serif;
+font-weight:300;
+letter-spacing:1px;
+text-transform:uppercase;
+color:#2b2b2b;
+'>
+Sistema Estatal Anticorrupción
+</h1>
+""", unsafe_allow_html=True)
+
+usuario = st.text_input("Usuario")
+password = st.text_input("Contraseña", type="password")
+
+if st.button("Entrar"):
     
-    
-    usuario = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
-
-    if st.button("Entrar"):
-
-        if validar(usuario,password):
-
-            st.session_state.login = True
-            st.session_state.usuario = usuario
-            st.rerun()
-
-        else:
-
-            st.error("Usuario o contraseña incorrectos")
-
-    st.stop()
+    if validar(usuario,password):
+        
+        st.session_state.login = True
+        st.session_state.usuario = usuario
+        st.rerun()
+        
+    else:
+        
+        st.error("Usuario o contraseña incorrectos")
 
 
 # ---------------------------------------------------
