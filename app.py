@@ -8,9 +8,9 @@ from services.dropbox_service import download_file, upload_file
 from services.lock_service import check_lock, create_lock
 
 
-# ======================================================
-# CONFIGURACIÓN
-# ======================================================
+# =====================================================
+# CONFIG
+# =====================================================
 
 st.set_page_config(
     page_title="Tablero Implementación PNA",
@@ -20,9 +20,9 @@ st.set_page_config(
 BASE_FILE = "/base_pna.xlsx"
 
 
-# ======================================================
-# FUNCION PARA DETECTAR COLUMNAS
-# ======================================================
+# =====================================================
+# FUNCION BUSCAR COLUMNA (blindado)
+# =====================================================
 
 def find_column(df, keywords):
 
@@ -39,9 +39,9 @@ def find_column(df, keywords):
     return None
 
 
-# ======================================================
+# =====================================================
 # LOGIN
-# ======================================================
+# =====================================================
 
 users = pd.read_excel("www/user-pass.xlsx")
 
@@ -56,16 +56,16 @@ if "login" not in st.session_state:
 
 if "hash_users" not in st.session_state:
 
-    hashed = {}
+    hashes = {}
 
     for _, row in users.iterrows():
 
-        hashed[row[user_col]] = bcrypt.hashpw(
+        hashes[row[user_col]] = bcrypt.hashpw(
             str(row[pass_col]).encode(),
             bcrypt.gensalt()
         )
 
-    st.session_state.hash_users = hashed
+    st.session_state.hash_users = hashes
 
 
 if not st.session_state.login:
@@ -100,9 +100,9 @@ if not st.session_state.login:
     st.stop()
 
 
-# ======================================================
-# ACTOR AUTOMÁTICO
-# ======================================================
+# =====================================================
+# DETECTAR ACTOR
+# =====================================================
 
 actores = pd.read_excel("www/user-act.xlsx")
 
@@ -119,22 +119,22 @@ if len(fila) > 0:
     actor = fila.iloc[0][actor_col]
 
 
-# ======================================================
+# =====================================================
 # BLOQUEO MULTIUSUARIO
-# ======================================================
+# =====================================================
 
 if check_lock():
 
-    st.warning("⚠ Otro usuario está editando")
+    st.warning("⚠ Otro usuario está editando el sistema")
 
 else:
 
     create_lock(st.session_state.user)
 
 
-# ======================================================
-# CARGAR BASE
-# ======================================================
+# =====================================================
+# CARGAR BASE DESDE DROPBOX
+# =====================================================
 
 def load_base():
 
@@ -164,26 +164,26 @@ if "data" not in st.session_state:
         st.session_state.data = []
 
 
-# ======================================================
-# CARGAR ALINEACIÓN
-# ======================================================
+# =====================================================
+# CARGAR ALINEACION
+# =====================================================
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 
 estrategia_col = find_column(alineacion, ["estrategia"])
 linea_col = find_column(alineacion, ["linea","línea"])
-accion_col = find_column(alineacion, ["accion"])
 
 
-# ======================================================
+# =====================================================
 # INTERFAZ
-# ======================================================
+# =====================================================
 
 st.title("Reporte de Acciones 2025")
 st.caption("Programa de Implementación del PNA")
 
 
-col1,col2,col3 = st.columns(3)
+col1,col2 = st.columns(2)
+
 
 with col1:
 
@@ -207,25 +207,25 @@ with col2:
     )
 
 
+# usamos la misma columna como acción
 acciones = alineacion.loc[
     alineacion[linea_col] == linea,
-    accion_col
+    linea_col
 ]
 
 
-with col3:
-
-    accion = st.selectbox(
-        "Acción",
-        acciones
-    )
+accion = st.selectbox(
+    "Acción",
+    acciones
+)
 
 
-# ======================================================
+# =====================================================
 # BOTONES
-# ======================================================
+# =====================================================
 
 c1,c2,c3 = st.columns(3)
+
 
 with c1:
 
@@ -234,7 +234,7 @@ with c1:
 
 with c2:
 
-    save = st.button("Guardar")
+    save = st.button("Guardar borrador")
 
 
 with c3:
@@ -242,9 +242,9 @@ with c3:
     send = st.button("Enviar")
 
 
-# ======================================================
+# =====================================================
 # AGREGAR FILA
-# ======================================================
+# =====================================================
 
 if add:
 
@@ -262,15 +262,15 @@ if add:
     })
 
 
-# ======================================================
-# TABLA
-# ======================================================
+# =====================================================
+# TABLA EDITABLE
+# =====================================================
 
-df_table = pd.DataFrame(st.session_state.data)
+table_df = pd.DataFrame(st.session_state.data)
 
 edited = st.data_editor(
 
-    df_table,
+    table_df,
     num_rows="dynamic",
     use_container_width=True
 
@@ -279,9 +279,9 @@ edited = st.data_editor(
 st.session_state.data = edited.to_dict("records")
 
 
-# ======================================================
+# =====================================================
 # GUARDAR
-# ======================================================
+# =====================================================
 
 def save_excel():
 
@@ -300,7 +300,7 @@ if save:
 
     save_excel()
 
-    st.success("Guardado")
+    st.success("Guardado correctamente")
 
 
 if send:
@@ -310,9 +310,9 @@ if send:
     st.success("Reporte enviado")
 
 
-# ======================================================
+# =====================================================
 # AUTOGUARDADO
-# ======================================================
+# =====================================================
 
 if "last_save" not in st.session_state:
 
