@@ -71,8 +71,10 @@ def validar(user,password):
 
 if not st.session_state.login:
 
+    st.image("www/logo_tablero.png",width=150)
     st.title("Sistema Estatal Anticorrupción")
-
+    
+    
     usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
