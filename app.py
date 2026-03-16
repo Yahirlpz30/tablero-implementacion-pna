@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import bcrypt
-import dropbox
-import io
+from datetime import date
 
 st.set_page_config(page_title="Tablero PNA", layout="wide")
 
@@ -10,13 +8,16 @@ st.set_page_config(page_title="Tablero PNA", layout="wide")
 # FUNCION CARGAR EXCEL
 # =====================================================
 
-@st.cache_data
 def load_excel(path):
 
-    df = pd.read_excel(path)
-    df.columns = df.columns.str.strip()
+    try:
+        df = pd.read_excel(path)
+        df.columns = df.columns.str.strip()
+        return df
 
-    return df
+    except:
+        st.error(f"No se pudo cargar {path}")
+        return pd.DataFrame()
 
 
 # =====================================================
@@ -27,34 +28,6 @@ users = load_excel("www/user-pass.xlsx")
 user_act = load_excel("www/user-act.xlsx")
 pi_actores = load_excel("www/pi-actores.xlsx")
 alineacion = load_excel("www/alineacion_pi.xlsx")
-tipo_accion = load_excel("www/tipo_accion.xlsx")
-tematicas = load_excel("www/tematicas.xlsx")
-
-
-# =====================================================
-# CATALOGOS
-# =====================================================
-
-opciones_tipo = tipo_accion.iloc[:,0].dropna().tolist()
-opciones_tematicas = tematicas.iloc[:,0].dropna().tolist()
-
-
-# =====================================================
-# HASH DE CONTRASEÑAS EN MEMORIA
-# =====================================================
-
-if "hashed_users" not in st.session_state:
-
-    hashed = {}
-
-    for _,row in users.iterrows():
-
-        hashed[row["user"]] = bcrypt.hashpw(
-            str(row["password"]).encode(),
-            bcrypt.gensalt()
-        )
-
-    st.session_state.hashed_users = hashed
 
 
 # =====================================================
@@ -65,30 +38,25 @@ if "login" not in st.session_state:
     st.session_state.login = False
 
 
-def check_password(user,password):
-
-    if user not in st.session_state.hashed_users:
-        return False
-
-    hashed = st.session_state.hashed_users[user]
-
-    return bcrypt.checkpw(password.encode(),hashed)
-
-
 if not st.session_state.login:
 
     st.title("Sistema Estatal Anticorrupción")
+    st.subheader("Ingreso al sistema")
 
     user = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Entrar"):
 
-        if check_password(user,password):
+        check = users[
+            (users["user"] == user) &
+            (users["password"] == password)
+        ]
+
+        if len(check) > 0:
 
             st.session_state.login = True
             st.session_state.user = user
-
             st.rerun()
 
         else:
@@ -99,7 +67,7 @@ if not st.session_state.login:
 
 
 # =====================================================
-# ACTOR DEL USUARIO
+# OBTENER ACTOR
 # =====================================================
 
 actor_usuario = user_act.loc[
@@ -113,13 +81,13 @@ actor_usuario = user_act.loc[
 # =====================================================
 
 lineas_actor = pi_actores.loc[
-    pi_actores["Actor"] == actor_usuario,
-    "Linea_codigo"
+    pi_actores["Actor"].str.contains(actor_usuario),
+    "Línea de acción"
 ].unique()
 
 
 alineacion_actor = alineacion[
-    alineacion["Linea_codigo"].isin(lineas_actor)
+    alineacion["Línea de acción"].isin(lineas_actor)
 ]
 
 
@@ -127,19 +95,15 @@ alineacion_actor = alineacion[
 # HEADER
 # =====================================================
 
-col1,col2,col3 = st.columns([5,2,1])
+col1,col2 = st.columns([6,1])
 
 with col1:
     st.title("Reporte de Acciones 2025")
 
 with col2:
-    st.write(f"Usuario: {st.session_state.user}")
-
-with col3:
 
     if st.button("Cerrar sesión"):
-
-        st.session_state.clear()
+        st.session_state.login = False
         st.rerun()
 
 
@@ -160,7 +124,7 @@ estrategia = st.selectbox(
 
 lineas = alineacion_actor.loc[
     alineacion_actor["Estrategia"] == estrategia,
-    "Linea_codigo"
+    "Línea de acción"
 ].unique()
 
 
@@ -170,17 +134,8 @@ linea = st.selectbox(
 )
 
 
-linea_texto = alineacion_actor.loc[
-    alineacion_actor["Linea_codigo"] == linea,
-    "Linea_texto"
-].values[0]
-
-
-st.write(linea_texto)
-
-
 # =====================================================
-# TABLA EN MEMORIA
+# SESSION DATA
 # =====================================================
 
 if "tabla" not in st.session_state:
@@ -189,8 +144,7 @@ if "tabla" not in st.session_state:
         columns=[
             "Actor",
             "Estrategia",
-            "Linea_codigo",
-            "Linea_texto",
+            "Linea",
             "Accion",
             "Inicio",
             "Fin",
@@ -211,61 +165,36 @@ with col1:
     if st.button("➕ Agregar Acción"):
 
         nueva = {
-
-            "Actor": actor_usuario,
-            "Estrategia": estrategia,
-            "Linea_codigo": linea,
-            "Linea_texto": linea_texto,
-            "Accion": "",
-            "Inicio": None,
-            "Fin": None,
-            "Tipo": "",
-            "Tematica": ""
+            "Actor":actor_usuario,
+            "Estrategia":estrategia,
+            "Linea":linea,
+            "Accion":"",
+            "Inicio":None,
+            "Fin":None,
+            "Tipo":"",
+            "Tematica":""
         }
 
-        st.session_state.tabla.loc[
-            len(st.session_state.tabla)
-        ] = nueva
+        st.session_state.tabla.loc[len(st.session_state.tabla)] = nueva
 
 
 with col2:
 
     if st.button("Guardar Borrador"):
 
-        buffer = io.BytesIO()
+        nombre = f"borrador_{actor_usuario}.xlsx"
 
         st.session_state.tabla.to_excel(
-            buffer,
+            nombre,
             index=False
         )
 
-        st.download_button(
-            "Descargar borrador",
-            buffer.getvalue(),
-            file_name="borrador.xlsx"
-        )
+        st.success("Borrador guardado")
 
 
 with col3:
 
     if st.button("Enviar"):
-
-        buffer = io.BytesIO()
-
-        st.session_state.tabla.to_excel(
-            buffer,
-            index=False
-        )
-
-        dbx = dropbox.Dropbox(
-            st.secrets["DROPBOX_TOKEN"]
-        )
-
-        dbx.files_upload(
-            buffer.getvalue(),
-            f"/envios/{actor_usuario}.xlsx",
-            mode=dropbox.files.WriteMode.overwrite
-        )
 
         st.success("Acciones enviadas")
 
@@ -285,8 +214,6 @@ if len(st.session_state.tabla) > 0:
 
         use_container_width=True,
 
-        num_rows="dynamic",
-
         column_config={
 
             "Inicio": st.column_config.DateColumn(
@@ -299,15 +226,17 @@ if len(st.session_state.tabla) > 0:
 
             "Tipo": st.column_config.SelectboxColumn(
                 "Tipo de Acción",
-                options=opciones_tipo
-            ),
-
-            "Tematica": st.column_config.SelectboxColumn(
-                "Temática",
-                options=opciones_tematicas
+                options=[
+                    "Capacitación",
+                    "Diagnóstico",
+                    "Sistema",
+                    "Norma",
+                    "Convenio"
+                ]
             )
+        },
 
-        }
+        num_rows="dynamic"
     )
 
     st.session_state.tabla = edited
