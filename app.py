@@ -28,7 +28,6 @@ st.image("www/logo_tablero.png", width=220)
 alineacion = limpiar_columnas(pd.read_excel("www/alineacion_pi.xlsx"))
 tipo_accion = limpiar_columnas(pd.read_excel("www/tipo_accion.xlsx"))
 tematicas = limpiar_columnas(pd.read_excel("www/tematicas.xlsx"))
-
 user_pass = limpiar_columnas(pd.read_excel("www/user-pass.xlsx"))
 user_act = limpiar_columnas(pd.read_excel("www/user-act.xlsx"))
 
@@ -59,7 +58,7 @@ if not st.session_state.login:
     if st.button("Entrar"):
 
         user = user_pass[
-            (user_pass["usuario"] == usuario) &
+            (user_pass["user"] == usuario) &
             (user_pass["password"] == password)
         ]
 
@@ -82,7 +81,7 @@ if not st.session_state.login:
 usuario_actual = st.session_state.user
 
 info_usuario = user_act[
-    user_act["usuario"] == usuario_actual
+    user_act["user"] == usuario_actual
 ].iloc[0]
 
 rol = info_usuario["rol"]
