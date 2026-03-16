@@ -84,7 +84,7 @@ info_usuario = user_act[
     user_act["user"] == usuario_actual
 ].iloc[0]
 
-rol = info_usuario["rol"]
+rol = info_usuario["permissions"]
 
 # -------------------------------
 # FILTRAR ESTRATEGIAS
