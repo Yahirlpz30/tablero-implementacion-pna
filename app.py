@@ -193,7 +193,10 @@ with col3:
 # DATA
 # -----------------------------
 
-df = descargar_excel()
+if "tabla_acciones" not in st.session_state:
+    st.session_state.tabla_acciones = descargar_excel()
+
+df = st.session_state.tabla_acciones
 
 if df.empty:
 
@@ -214,8 +217,22 @@ if df.empty:
 
 if agregar:
 
-    df.loc[len(df)] = ["","","","","","",""]
+    nueva_fila = {
+        "Estrategia":"",
+        "Linea":"",
+        "Accion":"",
+        "Inicio":"",
+        "Fin":"",
+        "Tipo":"",
+        "Tematica":""
+    }
 
+    st.session_state.tabla_acciones = pd.concat(
+        [st.session_state.tabla_acciones, pd.DataFrame([nueva_fila])],
+        ignore_index=True
+    )
+
+    st.rerun()
 
 # -----------------------------
 # INFO
@@ -322,7 +339,8 @@ for i in df.index:
 
         if st.button("🗑",key=f"del{i}"):
 
-            df = df.drop(i)
+            st.session_state.tabla_acciones = st.session_state.tabla_acciones.drop(i)
+st.rerun()
 
 
 # -----------------------------
@@ -333,7 +351,7 @@ if guardar:
 
     if crear_lock(st.session_state.usuario):
 
-        subir_excel(df)
+        subir_excel(st.session_state.tabla_acciones)
 
         liberar_lock()
 
