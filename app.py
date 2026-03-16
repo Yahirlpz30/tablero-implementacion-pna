@@ -1,34 +1,4 @@
-[12:40 AM, 3/16/2026] Yahir Lopez: import streamlit as st
-import pandas as pd
-from datetime import date
-
-st.set_page_config(page_title="Tablero PNA", layout="wide")
-
-# =====================================================
-# FUNCION CARGAR EXCEL
-# =====================================================
-
-def load_excel(path):
-
-    try:
-        df = pd.read_excel(path)
-        df.columns = df.columns.str.strip()
-        return df
-
-    except:
-        st.error(f"No se pudo cargar {path}")
-        return pd.DataFrame()
-
-
-# =====================================================
-# CARGAR ARCHIVOS
-# =====================================================
-
-users = load_excel("www/user-pass.xlsx")
-user_act = load_excel("www/user-act.xlsx")
-pi_actores = load_excel("www/pi-actores.xlsx")
-alineacion = load_exc…
-[12:45 AM, 3/16/2026] Yahir Lopez: import streamlit as st
+import streamlit as st
 import pandas as pd
 import bcrypt
 import dropbox
