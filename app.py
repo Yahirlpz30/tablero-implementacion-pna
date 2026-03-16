@@ -21,16 +21,40 @@ BASE_FILE = "/base_pna.xlsx"
 
 
 # =====================================================
-# FUNCION BUSCAR COLUMNA (blindado)
+# ESTILOS
 # =====================================================
 
-def find_column(df, keywords):
+st.markdown("""
+<style>
+
+header {visibility: hidden;}
+
+.stButton>button {
+    background-color:#0b7c83;
+    color:white;
+    border-radius:6px;
+    height:40px;
+}
+
+.logout button {
+    background-color:#a11d3a;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =====================================================
+# FUNCION BUSCAR COLUMNA
+# =====================================================
+
+def find_column(df, keys):
 
     for c in df.columns:
 
         name = c.lower()
 
-        for k in keywords:
+        for k in keys:
 
             if k in name:
 
@@ -47,7 +71,6 @@ users = pd.read_excel("www/user-pass.xlsx")
 
 user_col = find_column(users, ["user"])
 pass_col = find_column(users, ["pass"])
-perm_col = find_column(users, ["perm"])
 
 
 if "login" not in st.session_state:
@@ -58,7 +81,7 @@ if "hash_users" not in st.session_state:
 
     hashes = {}
 
-    for _, row in users.iterrows():
+    for _,row in users.iterrows():
 
         hashes[row[user_col]] = bcrypt.hashpw(
             str(row[pass_col]).encode(),
@@ -86,28 +109,63 @@ if not st.session_state.login:
 
                 st.session_state.login = True
                 st.session_state.user = username
-
                 st.rerun()
 
             else:
-
                 st.error("Contraseña incorrecta")
 
         else:
-
             st.error("Usuario no encontrado")
 
     st.stop()
 
 
 # =====================================================
-# DETECTAR ACTOR
+# HEADER
+# =====================================================
+
+col1,col2,col3 = st.columns([1,6,2])
+
+with col1:
+    st.image("www/logo_tablero.png", width=120)
+
+with col2:
+    st.markdown("### Sistema Estatal Anticorrupción")
+
+with col3:
+
+    st.write(f"Usuario: *{st.session_state.user}*")
+
+    if st.button("Cerrar sesión"):
+
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+
+        st.rerun()
+
+
+st.divider()
+
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+
+with st.sidebar:
+
+    st.markdown("### Año")
+
+    year = st.selectbox("", ["2025"])
+
+
+# =====================================================
+# ACTOR
 # =====================================================
 
 actores = pd.read_excel("www/user-act.xlsx")
 
 user_col_act = find_column(actores, ["user"])
-actor_col = find_column(actores, ["act","actor"])
+actor_col = find_column(actores, ["act"])
 
 
 actor = "Sin actor"
@@ -120,12 +178,12 @@ if len(fila) > 0:
 
 
 # =====================================================
-# BLOQUEO MULTIUSUARIO
+# BLOQUEO
 # =====================================================
 
 if check_lock():
 
-    st.warning("⚠ Otro usuario está editando el sistema")
+    st.warning("⚠ Otro usuario está editando")
 
 else:
 
@@ -133,7 +191,7 @@ else:
 
 
 # =====================================================
-# CARGAR BASE DESDE DROPBOX
+# CARGAR BASE
 # =====================================================
 
 def load_base():
@@ -165,7 +223,31 @@ if "data" not in st.session_state:
 
 
 # =====================================================
-# CARGAR ALINEACION
+# TITULO
+# =====================================================
+
+st.title("Reporte de Acciones 2025")
+st.caption("Programa de Implementación del PNA")
+
+
+# =====================================================
+# BOTONES
+# =====================================================
+
+col1,col2,col3 = st.columns(3)
+
+with col1:
+    add = st.button("➕ Agregar Acción")
+
+with col2:
+    save = st.button("💾 Guardar Borrador")
+
+with col3:
+    send = st.button("📤 Enviar")
+
+
+# =====================================================
+# ALINEACION
 # =====================================================
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
@@ -174,72 +256,30 @@ estrategia_col = find_column(alineacion, ["estrategia"])
 linea_col = find_column(alineacion, ["linea","línea"])
 
 
-# =====================================================
-# INTERFAZ
-# =====================================================
-
-st.title("Reporte de Acciones 2025")
-st.caption("Programa de Implementación del PNA")
-
-
-col1,col2 = st.columns(2)
-
-
-with col1:
-
-    estrategia = st.selectbox(
-        "Estrategia",
-        alineacion[estrategia_col].unique()
-    )
-
+estrategia = st.selectbox(
+    "Estrategia",
+    alineacion[estrategia_col].unique()
+)
 
 lineas = alineacion.loc[
     alineacion[estrategia_col] == estrategia,
     linea_col
 ].unique()
 
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
 
-with col2:
-
-    linea = st.selectbox(
-        "Línea de acción",
-        lineas
-    )
-
-
-# usamos la misma columna como acción
 acciones = alineacion.loc[
     alineacion[linea_col] == linea,
     linea_col
 ]
 
-
 accion = st.selectbox(
     "Acción",
     acciones
 )
-
-
-# =====================================================
-# BOTONES
-# =====================================================
-
-c1,c2,c3 = st.columns(3)
-
-
-with c1:
-
-    add = st.button("+ Agregar acción")
-
-
-with c2:
-
-    save = st.button("Guardar borrador")
-
-
-with c3:
-
-    send = st.button("Enviar")
 
 
 # =====================================================
@@ -263,17 +303,20 @@ if add:
 
 
 # =====================================================
-# TABLA EDITABLE
+# TABLA
 # =====================================================
 
-table_df = pd.DataFrame(st.session_state.data)
+st.info(
+    f"Año: {year} | Acciones: {len(st.session_state.data)}"
+)
+
+df_table = pd.DataFrame(st.session_state.data)
 
 edited = st.data_editor(
-
-    table_df,
+    df_table,
     num_rows="dynamic",
-    use_container_width=True
-
+    use_container_width=True,
+    height=400
 )
 
 st.session_state.data = edited.to_dict("records")
@@ -325,4 +368,4 @@ if time.time() - st.session_state.last_save > 120:
 
     st.session_state.last_save = time.time()
 
-    st.success("Guardado automático")
+    st.success("✔ Guardado automáticamente")
