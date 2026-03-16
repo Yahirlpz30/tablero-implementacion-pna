@@ -3,34 +3,12 @@ import pandas as pd
 import bcrypt
 import dropbox
 import io
-from datetime import date
 
 st.set_page_config(page_title="Tablero PNA", layout="wide")
 
-# =========================================================
-# CONFIGURACION DROPBOX
-# =========================================================
-
-DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
-
-def connect_dropbox():
-    return dropbox.Dropbox(DROPBOX_TOKEN)
-
-
-def upload_file(path, data):
-
-    dbx = connect_dropbox()
-
-    dbx.files_upload(
-        data,
-        path,
-        mode=dropbox.files.WriteMode.overwrite
-    )
-
-
-# =========================================================
+# =====================================================
 # FUNCION CARGAR EXCEL
-# =========================================================
+# =====================================================
 
 @st.cache_data
 def load_excel(path):
@@ -41,34 +19,60 @@ def load_excel(path):
     return df
 
 
-# =========================================================
+# =====================================================
 # CARGAR ARCHIVOS
-# =========================================================
+# =====================================================
 
 users = load_excel("www/user-pass.xlsx")
 user_act = load_excel("www/user-act.xlsx")
 pi_actores = load_excel("www/pi-actores.xlsx")
 alineacion = load_excel("www/alineacion_pi.xlsx")
+tipo_accion = load_excel("www/tipo_accion.xlsx")
+tematicas = load_excel("www/tematicas.xlsx")
 
 
-# =========================================================
+# =====================================================
+# LISTAS CATALOGOS
+# =====================================================
+
+opciones_tipo = tipo_accion.iloc[:,0].dropna().tolist()
+opciones_tematicas = tematicas.iloc[:,0].dropna().tolist()
+
+
+# =====================================================
+# HASH CONTRASEÑAS EN MEMORIA
+# =====================================================
+
+if "hashed_users" not in st.session_state:
+
+    hashed = {}
+
+    for _,row in users.iterrows():
+
+        hashed[row["user"]] = bcrypt.hashpw(
+            str(row["password"]).encode(),
+            bcrypt.gensalt()
+        )
+
+    st.session_state.hashed_users = hashed
+
+
+# =====================================================
 # LOGIN
-# =========================================================
+# =====================================================
 
 if "login" not in st.session_state:
     st.session_state.login = False
 
 
-def check_password(user, password):
+def check_password(user,password):
 
-    row = users.loc[users["user"] == user]
-
-    if len(row) == 0:
+    if user not in st.session_state.hashed_users:
         return False
 
-    hashed = row["password"].values[0].encode()
+    hashed = st.session_state.hashed_users[user]
 
-    return bcrypt.checkpw(password.encode(), hashed)
+    return bcrypt.checkpw(password.encode(),hashed)
 
 
 if not st.session_state.login:
@@ -76,53 +80,53 @@ if not st.session_state.login:
     st.title("Sistema Estatal Anticorrupción")
 
     user = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
+    password = st.text_input("Contraseña",type="password")
 
     if st.button("Entrar"):
 
-        if check_password(user, password):
+        if check_password(user,password):
 
             st.session_state.login = True
             st.session_state.user = user
+
             st.rerun()
 
         else:
 
-            st.error("Credenciales incorrectas")
+            st.error("Usuario o contraseña incorrectos")
 
     st.stop()
 
 
-# =========================================================
-# DETECTAR ACTOR
-# =========================================================
+# =====================================================
+# ACTOR DEL USUARIO
+# =====================================================
 
 actor_usuario = user_act.loc[
-    user_act["user"] == st.session_state.user,
+    user_act["user"]==st.session_state.user,
     "act"
 ].values[0]
 
 
-# =========================================================
+# =====================================================
 # FILTRAR LINEAS POR ACTOR
-# =========================================================
+# =====================================================
 
 lineas_actor = pi_actores.loc[
     pi_actores["Actor"].str.contains(actor_usuario),
     "Línea de acción"
 ].unique()
 
-
 alineacion_actor = alineacion[
     alineacion["Línea de acción"].isin(lineas_actor)
 ]
 
 
-# =========================================================
+# =====================================================
 # HEADER
-# =========================================================
+# =====================================================
 
-col1, col2 = st.columns([6,1])
+col1,col2 = st.columns([6,1])
 
 with col1:
     st.title("Reporte de Acciones 2025")
@@ -131,7 +135,6 @@ with col2:
 
     if st.button("Cerrar sesión"):
 
-        st.session_state.login = False
         st.session_state.clear()
         st.rerun()
 
@@ -139,9 +142,9 @@ with col2:
 st.divider()
 
 
-# =========================================================
+# =====================================================
 # SELECTORES
-# =========================================================
+# =====================================================
 
 estrategias = alineacion_actor["Estrategia"].unique()
 
@@ -150,9 +153,8 @@ estrategia = st.selectbox(
     estrategias
 )
 
-
 lineas = alineacion_actor.loc[
-    alineacion_actor["Estrategia"] == estrategia,
+    alineacion_actor["Estrategia"]==estrategia,
     "Línea de acción"
 ].unique()
 
@@ -162,9 +164,9 @@ linea = st.selectbox(
 )
 
 
-# =========================================================
-# SESSION TABLE
-# =========================================================
+# =====================================================
+# TABLA EN MEMORIA
+# =====================================================
 
 if "tabla" not in st.session_state:
 
@@ -182,28 +184,31 @@ if "tabla" not in st.session_state:
     )
 
 
-# =========================================================
+# =====================================================
 # BOTONES
-# =========================================================
+# =====================================================
 
-col1, col2, col3 = st.columns(3)
+col1,col2,col3 = st.columns(3)
 
 with col1:
 
     if st.button("➕ Agregar Acción"):
 
         nueva = {
-            "Actor": actor_usuario,
-            "Estrategia": estrategia,
-            "Linea": linea,
-            "Accion": "",
-            "Inicio": None,
-            "Fin": None,
-            "Tipo": "",
-            "Tematica": ""
+
+            "Actor":actor_usuario,
+            "Estrategia":estrategia,
+            "Linea":linea,
+            "Accion":"",
+            "Inicio":None,
+            "Fin":None,
+            "Tipo":"",
+            "Tematica":""
         }
 
-        st.session_state.tabla.loc[len(st.session_state.tabla)] = nueva
+        st.session_state.tabla.loc[
+            len(st.session_state.tabla)
+        ] = nueva
 
 
 with col2:
@@ -212,14 +217,16 @@ with col2:
 
         buffer = io.BytesIO()
 
-        st.session_state.tabla.to_excel(buffer, index=False)
-
-        upload_file(
-            f"/borradores/{actor_usuario}.xlsx",
-            buffer.getvalue()
+        st.session_state.tabla.to_excel(
+            buffer,
+            index=False
         )
 
-        st.success("Borrador guardado")
+        st.download_button(
+            "Descargar borrador",
+            buffer.getvalue(),
+            file_name="borrador.xlsx"
+        )
 
 
 with col3:
@@ -228,11 +235,19 @@ with col3:
 
         buffer = io.BytesIO()
 
-        st.session_state.tabla.to_excel(buffer, index=False)
+        st.session_state.tabla.to_excel(
+            buffer,
+            index=False
+        )
 
-        upload_file(
+        dbx = dropbox.Dropbox(
+            st.secrets["DROPBOX_TOKEN"]
+        )
+
+        dbx.files_upload(
+            buffer.getvalue(),
             f"/envios/{actor_usuario}.xlsx",
-            buffer.getvalue()
+            mode=dropbox.files.WriteMode.overwrite
         )
 
         st.success("Acciones enviadas")
@@ -241,11 +256,11 @@ with col3:
 st.divider()
 
 
-# =========================================================
+# =====================================================
 # TABLA EDITABLE
-# =========================================================
+# =====================================================
 
-if len(st.session_state.tabla) > 0:
+if len(st.session_state.tabla)>0:
 
     edited = st.data_editor(
 
@@ -267,14 +282,14 @@ if len(st.session_state.tabla) > 0:
 
             "Tipo": st.column_config.SelectboxColumn(
                 "Tipo de Acción",
-                options=[
-                    "Capacitación",
-                    "Diagnóstico",
-                    "Sistema",
-                    "Norma",
-                    "Convenio"
-                ]
+                options=opciones_tipo
+            ),
+
+            "Tematica": st.column_config.SelectboxColumn(
+                "Temática",
+                options=opciones_tematicas
             )
+
         }
     )
 
