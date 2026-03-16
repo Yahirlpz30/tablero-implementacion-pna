@@ -1,12 +1,21 @@
-from services.dropbox_service import connect_dropbox
 import dropbox
+import streamlit as st
 
-LOCK_FILE = "/tablero_prueba/lock.txt"
 
+LOCK_FILE = "/lock.txt"
+
+
+def get_client():
+    return dropbox.Dropbox(st.secrets["DROPBOX_TOKEN"])
+
+
+# ======================================
+# VERIFICAR LOCK
+# ======================================
 
 def check_lock():
 
-    dbx = connect_dropbox()
+    dbx = get_client()
 
     try:
         dbx.files_get_metadata(LOCK_FILE)
@@ -15,20 +24,31 @@ def check_lock():
         return False
 
 
-def create_lock():
+# ======================================
+# CREAR LOCK
+# ======================================
 
-    dbx = connect_dropbox()
+def create_lock(user):
 
-    dbx.files_upload(
-        b"locked",
-        LOCK_FILE,
-        mode=dropbox.files.WriteMode.overwrite
-    )
+    dbx = get_client()
+
+    try:
+        dbx.files_upload(
+            user.encode(),
+            LOCK_FILE,
+            mode=dropbox.files.WriteMode.overwrite
+        )
+    except:
+        pass
 
 
-def remove_lock():
+# ======================================
+# ELIMINAR LOCK
+# ======================================
 
-    dbx = connect_dropbox()
+def delete_lock():
+
+    dbx = get_client()
 
     try:
         dbx.files_delete_v2(LOCK_FILE)
