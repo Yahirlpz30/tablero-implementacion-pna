@@ -1,390 +1,281 @@
 import streamlit as st
 import pandas as pd
+import datetime
 import dropbox
-import json
-from datetime import datetime, timedelta
+import io
 
 st.set_page_config(layout="wide")
 
-# -----------------------------
-# ESTILOS
-# -----------------------------
-
-st.markdown("""
-<style>
-
-.block-container{
-padding-top:1rem;
-}
-
-.stButton>button{
-border-radius:8px;
-height:40px;
-}
-
-.sidebar .sidebar-content{
-background-color:#2c2f33;
-}
-
-</style>
-""",unsafe_allow_html=True)
-
-# -----------------------------
-# DROPBOX
-# -----------------------------
-
-DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
-
-dbx = dropbox.Dropbox(DROPBOX_TOKEN)
-
-ARCHIVO = "/tablero_prueba/base.xlsx"
-ARCHIVO_LOCK = "/tablero_prueba/lock_base.json"
-
-# -----------------------------
-# FUNCIONES DROPBOX
-# -----------------------------
-
-def descargar_excel():
-
-    try:
-
-        metadata,res = dbx.files_download(ARCHIVO)
-
-        return pd.read_excel(res.content)
-
-    except:
-
-        return pd.DataFrame()
-
-def subir_excel(df):
-
-    dbx.files_upload(
-        df.to_csv(index=False).encode(),
-        ARCHIVO,
-        mode=dropbox.files.WriteMode.overwrite
-    )
-
-# -----------------------------
-# FUNCIONES LOCK
-# -----------------------------
-
-def leer_lock():
-
-    try:
-
-        metadata,res = dbx.files_download(ARCHIVO_LOCK)
-
-        return json.loads(res.content)
-
-    except:
-
-        return None
-
-
-def crear_lock(usuario):
-
-    lock = leer_lock()
-
-    if lock:
-
-        tiempo_lock = datetime.fromisoformat(lock["time"])
-
-        if datetime.now() - tiempo_lock < timedelta(minutes=2):
-
-            return False
-
-    data = {
-        "usuario":usuario,
-        "time":datetime.now().isoformat()
-    }
-
-    dbx.files_upload(
-        json.dumps(data).encode(),
-        ARCHIVO_LOCK,
-        mode=dropbox.files.WriteMode.overwrite
-    )
-
-    return True
-
-
-def liberar_lock():
-
-    try:
-
-        dbx.files_delete_v2(ARCHIVO_LOCK)
-
-    except:
-
-        pass
-
-# -----------------------------
-# LOGIN
-# -----------------------------
-
-usuarios = pd.read_excel("www/user-pass.xlsx")
-
-if "login" not in st.session_state:
-    st.session_state.login=False
-
-if not st.session_state.login:
-
-    st.image("www/logo_tablero.png",width=200)
-
-    st.title("SISTEMA ESTATAL ANTICORRUPCIÓN")
-
-    user = st.text_input("Usuario")
-    password = st.text_input("Contraseña",type="password")
-
-    if st.button("Entrar"):
-
-        row = usuarios[
-            (usuarios["user"]==user) &
-            (usuarios["password"]==password)
-        ]
-
-        if len(row)>0:
-
-            st.session_state.login=True
-            st.session_state.usuario=user
-            st.rerun()
-
-        else:
-
-            st.error("Usuario o contraseña incorrectos")
-
-    st.stop()
-
-# -----------------------------
-# HEADER
-# -----------------------------
-
-col1,col2,col3 = st.columns([1,6,1])
-
-with col1:
-    st.image("www/logo_tablero.png",width=120)
-
-with col3:
-
-    if st.button("Cerrar sesión"):
-
-        st.session_state.login=False
-        st.rerun()
-
-# -----------------------------
-# SIDEBAR
-# -----------------------------
-
-st.sidebar.markdown("### 2025")
-
-# -----------------------------
-# TITULO
-# -----------------------------
-
-st.title("Reporte de Acciones 2025")
-st.caption("Programa de Implementación del PNA")
-
-# -----------------------------
-# BOTONES
-# -----------------------------
-
-colA,colB,colC = st.columns([1,1,1])
-
-with colA:
-    agregar = st.button("+ Agregar Acción")
-
-with colB:
-    guardar = st.button("Guardar Borrador")
-
-with colC:
-    enviar = st.button("Enviar")
-
-# -----------------------------
-# CATALOGOS
-# -----------------------------
+# -------------------------------
+# LOGO
+# -------------------------------
+
+st.image("www/logo_tablero.png", width=200)
+
+# -------------------------------
+# CARGA DE ARCHIVOS
+# -------------------------------
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 tipo_accion = pd.read_excel("www/tipo_accion.xlsx")
 tematicas = pd.read_excel("www/tematicas.xlsx")
+usuarios = pd.read_excel("www/usuarios.xlsx")
 
-estrategias = alineacion["Estrategia"].dropna().unique().tolist()
-tipos = tipo_accion.iloc[:,0].dropna().tolist()
-temas = tematicas.iloc[:,0].dropna().tolist()
+# -------------------------------
+# LOGIN
+# -------------------------------
 
-# -----------------------------
-# SESSION TABLA
-# -----------------------------
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+if not st.session_state.login:
+
+    st.title("SISTEMA ESTATAL ANTICORRUPCIÓN")
+
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+
+    if st.button("Entrar"):
+
+        user = usuarios[
+            (usuarios["usuario"] == usuario) &
+            (usuarios["password"] == password)
+        ]
+
+        if len(user) > 0:
+
+            st.session_state.login = True
+            st.session_state.user = usuario
+
+            st.rerun()
+
+        else:
+            st.error("Usuario o contraseña incorrectos")
+
+    st.stop()
+
+# -------------------------------
+# USUARIO LOGUEADO
+# -------------------------------
+
+usuario_actual = st.session_state.user
+
+info_usuario = usuarios[
+    usuarios["usuario"] == usuario_actual
+].iloc[0]
+
+rol = info_usuario["rol"]
+
+# -------------------------------
+# FILTRAR ESTRATEGIAS
+# -------------------------------
+
+if rol == "admin":
+
+    estrategias_disponibles = alineacion["Estrategia"].unique()
+
+else:
+
+    estrategias_permitidas = str(
+        info_usuario["estrategias"]
+    ).split(",")
+
+    estrategias_disponibles = alineacion[
+        alineacion["Estrategia"].str.startswith(
+            tuple(estrategias_permitidas)
+        )
+    ]["Estrategia"].unique()
+
+# -------------------------------
+# HEADER
+# -------------------------------
+
+col1, col2 = st.columns([8,2])
+
+with col1:
+    st.title("Reporte de Acciones 2025")
+    st.caption("Programa de Implementación del PNA")
+
+with col2:
+
+    st.write(f"Usuario: {usuario_actual}")
+
+    if st.button("Cerrar sesión"):
+        st.session_state.login = False
+        st.rerun()
+
+# -------------------------------
+# BOTONES
+# -------------------------------
+
+c1, c2, c3 = st.columns([2,2,2])
 
 if "tabla" not in st.session_state:
 
     st.session_state.tabla = pd.DataFrame(columns=[
         "Estrategia",
-        "Linea",
-        "Accion",
+        "Línea de Acción",
+        "Acción",
         "Inicio",
         "Fin",
-        "Tipo",
-        "Tematica"
+        "Tipo de Acción",
+        "Temática"
     ])
 
-# -----------------------------
-# AGREGAR FILA
-# -----------------------------
+with c1:
 
-if agregar:
+    if st.button("+ Agregar Acción"):
 
-    nueva = pd.DataFrame([{
-        "Estrategia":"",
-        "Linea":"",
-        "Accion":"",
-        "Inicio":"",
-        "Fin":"",
-        "Tipo":"",
-        "Tematica":""
-    }])
+        nueva = {
+            "Estrategia":"",
+            "Línea de Acción":"",
+            "Acción":"",
+            "Inicio":"",
+            "Fin":"",
+            "Tipo de Acción":"",
+            "Temática":""
+        }
 
-    st.session_state.tabla = pd.concat(
-        [st.session_state.tabla,nueva],
-        ignore_index=True
-    )
+        st.session_state.tabla = pd.concat(
+            [st.session_state.tabla, pd.DataFrame([nueva])],
+            ignore_index=True
+        )
 
-    st.rerun()
+with c2:
 
-df = st.session_state.tabla
+    guardar = st.button("Guardar Borrador")
 
-# -----------------------------
+with c3:
+
+    enviar = st.button("Enviar")
+
+# -------------------------------
 # INFO
-# -----------------------------
+# -------------------------------
 
-st.write(f"Año: 2025 | Acciones: {len(df)}")
+st.write(
+f"Año: 2025 | Acciones: {len(st.session_state.tabla)}"
+)
 
-# -----------------------------
-# CABECERA TABLA
-# -----------------------------
+# -------------------------------
+# TABLA
+# -------------------------------
 
-h0,h1,h2,h3,h4,h5,h6,h7,h8 = st.columns([0.5,2,2,3,1.5,1.5,2,2,0.5])
+for i in range(len(st.session_state.tabla)):
 
-h1.write("Estrategia")
-h2.write("Línea de Acción")
-h3.write("Acción")
-h4.write("Inicio")
-h5.write("Fin")
-h6.write("Tipo de Acción")
-h7.write("Temática")
-
-# -----------------------------
-# FILAS
-# -----------------------------
-
-for i in df.index:
-
-    c0,c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([0.5,2,2,3,1.5,1.5,2,2,0.5])
+    c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([2,2,3,1,1,2,2,0.5])
 
     with c1:
 
         estrategia = st.selectbox(
-            "",
-            estrategias,
-            key=f"estrategia_{i}"
+            "Estrategia",
+            estrategias_disponibles,
+            key=f"est_{i}"
         )
 
-        df.at[i,"Estrategia"]=estrategia
-
     lineas = alineacion[
-        alineacion["Estrategia"]==estrategia
-    ]["Línea de acción"].tolist()
+        alineacion["Estrategia"] == estrategia
+    ]["Línea de acción"].unique()
 
     with c2:
 
         linea = st.selectbox(
-            "",
+            "Línea",
             lineas,
-            key=f"linea_{i}"
+            key=f"lin_{i}"
         )
 
-        df.at[i,"Linea"]=linea
-
     acciones = alineacion[
-        alineacion["Línea de acción"]==linea
+        alineacion["Línea de acción"] == linea
     ]["Acción"].tolist()
 
     with c3:
 
         accion = st.selectbox(
-            "",
+            "Acción",
             acciones,
-            key=f"accion_{i}"
+            key=f"acc_{i}"
         )
-
-        df.at[i,"Accion"]=accion
 
     with c4:
 
-        inicio = st.date_input("",key=f"inicio_{i}")
-        df.at[i,"Inicio"]=inicio
+        inicio = st.date_input(
+            "Inicio",
+            key=f"ini_{i}"
+        )
 
     with c5:
 
-        fin = st.date_input("",key=f"fin_{i}")
-        df.at[i,"Fin"]=fin
+        fin = st.date_input(
+            "Fin",
+            key=f"fin_{i}"
+        )
 
     with c6:
 
-        tipo = st.selectbox("",tipos,key=f"tipo_{i}")
-        df.at[i,"Tipo"]=tipo
+        tipo = st.selectbox(
+            "Tipo",
+            tipo_accion["tipo_accion"],
+            key=f"tipo_{i}"
+        )
 
     with c7:
 
-        tematica = st.selectbox("",temas,key=f"tema_{i}")
-        df.at[i,"Tematica"]=tematica
+        tema = st.selectbox(
+            "Temática",
+            tematicas["tematica"],
+            key=f"tema_{i}"
+        )
 
     with c8:
 
-        if st.button("🗑",key=f"del_{i}"):
+        if st.button("🗑", key=f"del_{i}"):
 
-            st.session_state.tabla = st.session_state.tabla.drop(i).reset_index(drop=True)
+            st.session_state.tabla = st.session_state.tabla.drop(i)
+
+            st.session_state.tabla.reset_index(
+                drop=True,
+                inplace=True
+            )
 
             st.rerun()
 
-# -----------------------------
+# -------------------------------
+# DROPBOX
+# -------------------------------
+
+DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
+
+dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+
+RUTA = "/tablero_prueba/base.xlsx"
+
+# -------------------------------
 # GUARDAR
-# -----------------------------
+# -------------------------------
+
+def guardar_dropbox(df):
+
+    buffer = io.BytesIO()
+
+    df.to_excel(buffer, index=False)
+
+    buffer.seek(0)
+
+    dbx.files_upload(
+        buffer.read(),
+        RUTA,
+        mode=dropbox.files.WriteMode.overwrite
+    )
 
 if guardar:
 
-    if crear_lock(st.session_state.usuario):
+    guardar_dropbox(st.session_state.tabla)
 
-        subir_excel(st.session_state.tabla)
-
-        liberar_lock()
-
-        st.success(f"Guardado: {datetime.now().strftime('%H:%M')}")
-
-    else:
-
-        lock = leer_lock()
-
-        if lock:
-
-            st.error(f"Archivo en edición por {lock['usuario']}")
-
-# -----------------------------
-# ENVIAR
-# -----------------------------
+    st.success("Guardado correctamente")
 
 if enviar:
 
-    if crear_lock(st.session_state.usuario):
+    guardar_dropbox(st.session_state.tabla)
 
-        subir_excel(st.session_state.tabla)
-
-        liberar_lock()
-
-        st.success("Enviado correctamente")
-
-    else:
-
-        lock = leer_lock()
-
-        if lock:
-
-            st.error(f"Archivo en edición por {lock['usuario']}")
+    st.success("Información enviada")
