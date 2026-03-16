@@ -97,7 +97,7 @@ if st.button("Entrar"):
     if validar(usuario,password):
         
         st.session_state.login = True
-        st.session_state.usuario = usuario
+        st.session_state.user = usuario
         st.rerun()
         
     else:
@@ -110,7 +110,7 @@ if st.button("Entrar"):
 # ---------------------------------------------------
 
 actor_usuario = user_act.loc[
-    user_act["user"] == st.session_state.usuario,
+    user_act["user"] == st.session_state.user,
     "act"
 ].values[0]
 
