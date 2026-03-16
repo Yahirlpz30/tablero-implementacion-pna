@@ -1,51 +1,76 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 from services.dropbox_service import read_excel_dropbox, upload_excel_dropbox
 
+
+# =====================================
+# Configuración visual de la app
+# =====================================
+
 st.set_page_config(
     page_title="Tablero de Implementación",
-    layout="wide"
+    layout="wide",
+    page_icon="www/favicon.png"
 )
 
-st.title("Tablero de Implementación - Sistema Anticorrupción")
+# Logo
+st.image("www/logo_tablero.png", width=300)
 
-# =========================
+st.title("Tablero de Implementación de la Política Nacional Anticorrupción")
+
+st.markdown("---")
+
+
+# =====================================
 # Cargar datos desde Dropbox
-# =========================
+# =====================================
 
 @st.cache_data
 def load_data():
     return read_excel_dropbox("/tablero_prueba/base.xlsx")
 
-data = load_data()
+try:
 
-# =========================
-# KPIs principales
-# =========================
+    data = load_data()
+
+except Exception as e:
+
+    st.error("Error cargando datos desde Dropbox")
+    st.stop()
+
+
+# =====================================
+# KPIs
+# =====================================
 
 total_acciones = len(data)
 
 acciones_reportadas = (data["Acción reportada"] != "Por reportar").sum()
 
-avance = round((acciones_reportadas / total_acciones) * 100,2)
+avance = round((acciones_reportadas / total_acciones) * 100, 2)
 
-col1, col2, col3 = st.columns(3)
+k1, k2, k3 = st.columns(3)
 
-col1.metric("Total acciones", total_acciones)
-col2.metric("Acciones reportadas", acciones_reportadas)
-col3.metric("Avance (%)", avance)
+k1.metric("Total acciones", total_acciones)
 
-st.divider()
+k2.metric("Acciones reportadas", acciones_reportadas)
 
-# =========================
+k3.metric("Avance (%)", avance)
+
+
+st.markdown("---")
+
+
+# =====================================
 # Ranking de instituciones
-# =========================
+# =====================================
 
 ranking = (
     data.groupby("Actor")
-    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean()*100)
+    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean() * 100)
     .reset_index(name="avance")
 )
 
@@ -60,52 +85,60 @@ fig = px.bar(
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.divider()
 
-# =========================
+st.markdown("---")
+
+
+# =====================================
 # Filtros
-# =========================
+# =====================================
 
-st.subheader("Filtros")
+st.subheader("Captura de acciones")
+
+col1, col2, col3 = st.columns(3)
 
 actores = sorted(data["Actor"].unique())
 
-actor_seleccionado = st.selectbox(
-    "Seleccionar institución",
+actor = col1.selectbox(
+    "Institución",
     actores
 )
 
-df_actor = data[data["Actor"] == actor_seleccionado]
+df_actor = data[data["Actor"] == actor]
 
-# Estrategias
 
 estrategias = sorted(df_actor["No. Estrategia"].unique())
 
-estrategia_seleccionada = st.selectbox(
-    "Seleccionar estrategia",
+estrategia = col2.selectbox(
+    "Estrategia",
     estrategias
 )
 
-df_estrategia = df_actor[df_actor["No. Estrategia"] == estrategia_seleccionada]
+df_estrategia = df_actor[
+    df_actor["No. Estrategia"] == estrategia
+]
 
-# Líneas de acción
 
 lineas = sorted(df_estrategia["No. Línea de acción"].unique())
 
-linea_seleccionada = st.selectbox(
-    "Seleccionar línea de acción",
+linea = col3.selectbox(
+    "Línea de acción",
     lineas
 )
 
-df_linea = df_estrategia[df_estrategia["No. Línea de acción"] == linea_seleccionada]
+df_linea = df_estrategia[
+    df_estrategia["No. Línea de acción"] == linea
+]
 
-st.divider()
 
-# =========================
+st.markdown("---")
+
+
+# =====================================
 # Tabla editable
-# =========================
+# =====================================
 
-st.subheader("Captura de acciones")
+st.subheader("Registro de acciones")
 
 edited_df = st.data_editor(
     df_linea,
@@ -113,33 +146,51 @@ edited_df = st.data_editor(
     use_container_width=True
 )
 
-# =========================
+
+# =====================================
 # Guardar cambios
-# =========================
+# =====================================
 
 if st.button("Guardar cambios"):
 
-    try:
+    with st.spinner("Guardando información..."):
 
-        # eliminar filas viejas de esa línea
-        data_restante = data[
-            data["No. Línea de acción"] != linea_seleccionada
-        ]
+        try:
 
-        # combinar con datos editados
-        nuevo_df = pd.concat([data_restante, edited_df])
+            restante = data[
+                data["No. Línea de acción"] != linea
+            ]
 
-        # guardar en Dropbox
-        upload_excel_dropbox(
-            nuevo_df,
-            "/tablero_prueba/base.xlsx"
-        )
+            nuevo_df = pd.concat(
+                [restante, edited_df]
+            )
 
-        st.success("Datos guardados correctamente")
+            upload_excel_dropbox(
+                nuevo_df,
+                "/tablero_prueba/base.xlsx"
+            )
 
-        st.cache_data.clear()
+            # snapshot histórico
 
-    except Exception as e:
+            snapshot_name = (
+                "/tablero_prueba/snaps/"
+                + actor
+                + "_"
+                + datetime.now().strftime("%Y%m%d_%H%M")
+                + ".xlsx"
+            )
 
-        st.error("Error guardando datos")
-        st.write(e)
+            upload_excel_dropbox(
+                edited_df,
+                snapshot_name
+            )
+
+            st.success("Información guardada correctamente")
+
+            st.cache_data.clear()
+
+        except Exception as e:
+
+            st.error("Error al guardar los datos")
+
+            st.write(e)
