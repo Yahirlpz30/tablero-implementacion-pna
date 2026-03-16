@@ -1,4 +1,35 @@
-import streamlit as st
+[1:02 AM, 3/16/2026] Yahir Lopez: mport streamlit as st
+import pandas as pd
+import bcrypt
+import dropbox
+import io
+
+st.set_page_config(page_title="Tablero PNA", layout="wide")
+
+# =====================================================
+# FUNCION CARGAR EXCEL
+# =====================================================
+
+@st.cache_data
+def load_excel(path):
+
+    df = pd.read_excel(path)
+    df.columns = df.columns.str.strip()
+
+    return df
+
+
+# =====================================================
+# CARGAR ARCHIVOS
+# =====================================================
+
+users = load_excel("www/user-pass.xlsx")
+user_act = load_excel("www/user-act.xlsx")
+pi_actores = load_excel("www/pi-actores.xlsx")
+alineacion = load_excel("www/alineacion_pi.xlsx")
+tipo_accion = load_excel("www/tipo_accion.xlsx")
+tem…
+[1:10 AM, 3/16/2026] Yahir Lopez: import streamlit as st
 import pandas as pd
 import bcrypt
 import dropbox
@@ -32,7 +63,7 @@ tematicas = load_excel("www/tematicas.xlsx")
 
 
 # =====================================================
-# LISTAS CATALOGOS
+# CATALOGOS
 # =====================================================
 
 opciones_tipo = tipo_accion.iloc[:,0].dropna().tolist()
@@ -40,7 +71,7 @@ opciones_tematicas = tematicas.iloc[:,0].dropna().tolist()
 
 
 # =====================================================
-# HASH CONTRASEÑAS EN MEMORIA
+# HASH DE CONTRASEÑAS EN MEMORIA
 # =====================================================
 
 if "hashed_users" not in st.session_state:
@@ -80,7 +111,7 @@ if not st.session_state.login:
     st.title("Sistema Estatal Anticorrupción")
 
     user = st.text_input("Usuario")
-    password = st.text_input("Contraseña",type="password")
+    password = st.text_input("Contraseña", type="password")
 
     if st.button("Entrar"):
 
@@ -103,22 +134,23 @@ if not st.session_state.login:
 # =====================================================
 
 actor_usuario = user_act.loc[
-    user_act["user"]==st.session_state.user,
+    user_act["user"] == st.session_state.user,
     "act"
 ].values[0]
 
 
 # =====================================================
-# FILTRAR LINEAS POR ACTOR
+# LINEAS PERMITIDAS
 # =====================================================
 
 lineas_actor = pi_actores.loc[
-    pi_actores["Actor"].str.contains(actor_usuario),
-    "Línea de acción"
+    pi_actores["Actor"] == actor_usuario,
+    "Linea_codigo"
 ].unique()
 
+
 alineacion_actor = alineacion[
-    alineacion["Línea de acción"].isin(lineas_actor)
+    alineacion["Linea_codigo"].isin(lineas_actor)
 ]
 
 
@@ -126,12 +158,15 @@ alineacion_actor = alineacion[
 # HEADER
 # =====================================================
 
-col1,col2 = st.columns([6,1])
+col1,col2,col3 = st.columns([5,2,1])
 
 with col1:
     st.title("Reporte de Acciones 2025")
 
 with col2:
+    st.write(f"Usuario: {st.session_state.user}")
+
+with col3:
 
     if st.button("Cerrar sesión"):
 
@@ -153,15 +188,26 @@ estrategia = st.selectbox(
     estrategias
 )
 
+
 lineas = alineacion_actor.loc[
-    alineacion_actor["Estrategia"]==estrategia,
-    "Línea de acción"
+    alineacion_actor["Estrategia"] == estrategia,
+    "Linea_codigo"
 ].unique()
+
 
 linea = st.selectbox(
     "Línea de acción",
     lineas
 )
+
+
+linea_texto = alineacion_actor.loc[
+    alineacion_actor["Linea_codigo"] == linea,
+    "Linea_texto"
+].values[0]
+
+
+st.write(linea_texto)
 
 
 # =====================================================
@@ -174,7 +220,8 @@ if "tabla" not in st.session_state:
         columns=[
             "Actor",
             "Estrategia",
-            "Linea",
+            "Linea_codigo",
+            "Linea_texto",
             "Accion",
             "Inicio",
             "Fin",
@@ -196,14 +243,15 @@ with col1:
 
         nueva = {
 
-            "Actor":actor_usuario,
-            "Estrategia":estrategia,
-            "Linea":linea,
-            "Accion":"",
-            "Inicio":None,
-            "Fin":None,
-            "Tipo":"",
-            "Tematica":""
+            "Actor": actor_usuario,
+            "Estrategia": estrategia,
+            "Linea_codigo": linea,
+            "Linea_texto": linea_texto,
+            "Accion": "",
+            "Inicio": None,
+            "Fin": None,
+            "Tipo": "",
+            "Tematica": ""
         }
 
         st.session_state.tabla.loc[
@@ -260,7 +308,7 @@ st.divider()
 # TABLA EDITABLE
 # =====================================================
 
-if len(st.session_state.tabla)>0:
+if len(st.session_state.tabla) > 0:
 
     edited = st.data_editor(
 
