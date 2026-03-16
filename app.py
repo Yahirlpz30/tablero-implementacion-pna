@@ -129,20 +129,15 @@ if not st.session_state.login:
 
                 stored_password = user.iloc[0]["password"]
 
-                try:
+                if password == stored_password:
 
-                    if bcrypt.checkpw(password.encode(), stored_password.encode()):
+                    st.session_state["login"] = True
+                    st.session_state["user"] = username
+                
+                    st.rerun()
 
-                        st.session_state.login = True
-                        st.session_state.user = username
-
-                        st.rerun()
-
-                    else:
-                        st.error("Contraseña incorrecta")
-
-                except:
-                    st.error("Error verificando contraseña")
+                else:
+                st.error("Contraseña incorrecta")
 
             else:
                 st.error("Usuario no encontrado")
