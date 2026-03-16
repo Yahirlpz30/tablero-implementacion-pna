@@ -70,13 +70,12 @@ st.markdown(
 .main-container{
     display:flex;
     justify-content:center;
-    align-items:center;
-    height:80vh;
+    margin-top:40px;
 }
 
 .login-card{
     background:white;
-    padding:40px;
+    padding:35px;
     border-radius:10px;
     width:420px;
     text-align:center;
