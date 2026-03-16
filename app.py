@@ -28,37 +28,6 @@ user_act = load_excel("www/user-act.xlsx")
 pi_actores = load_excel("www/pi-actores.xlsx")
 alineacion = load_excel("www/alineacion_pi.xlsx")
 tipo_accion = load_excel("www/tipo_accion.xlsx")
-tem…
-[1:10 AM, 3/16/2026] Yahir Lopez: import streamlit as st
-import pandas as pd
-import bcrypt
-import dropbox
-import io
-
-st.set_page_config(page_title="Tablero PNA", layout="wide")
-
-# =====================================================
-# FUNCION CARGAR EXCEL
-# =====================================================
-
-@st.cache_data
-def load_excel(path):
-
-    df = pd.read_excel(path)
-    df.columns = df.columns.str.strip()
-
-    return df
-
-
-# =====================================================
-# CARGAR ARCHIVOS
-# =====================================================
-
-users = load_excel("www/user-pass.xlsx")
-user_act = load_excel("www/user-act.xlsx")
-pi_actores = load_excel("www/pi-actores.xlsx")
-alineacion = load_excel("www/alineacion_pi.xlsx")
-tipo_accion = load_excel("www/tipo_accion.xlsx")
 tematicas = load_excel("www/tematicas.xlsx")
 
 
