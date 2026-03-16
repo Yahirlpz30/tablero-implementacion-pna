@@ -124,7 +124,7 @@ col1,col2 = st.columns([8,1])
 
 with col1:
 
-    st.image("logo_sea.png", width=120)
+    st.image("www/logo_tablero.png", width=120)
     st.title("Reporte de Acciones 2025")
     st.write("Programa de Implementación del PNA")
 
