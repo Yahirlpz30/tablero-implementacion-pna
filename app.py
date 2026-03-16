@@ -52,11 +52,17 @@ user_actor = pd.read_excel("www/user-act.xlsx")
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+    
+st.image("www/logo_tablero.png", width=300)
 
-st.sidebar.title("Login")
+st.title("Sistema Estatal Anticorrupción")
 
-username = st.sidebar.text_input("Usuario")
-password = st.sidebar.text_input("Contraseña", type="password")
+st.subheader("Tablero de Implementación del PNA")
+
+st.write("")
+
+username = st.text_input("Usuario")
+password = st.text_input("Contraseña", type="password")
 
 if "login" not in st.session_state:
     st.session_state.login = False
