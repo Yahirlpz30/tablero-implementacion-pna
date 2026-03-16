@@ -1,17 +1,15 @@
 import streamlit as st
 import pandas as pd
 import bcrypt
-import dropbox
 import io
 
-st.set_page_config(page_title="Tablero PNA", layout="wide")
+st.set_page_config(page_title="Sistema Estatal Anticorrupción", layout="wide")
 
-# =====================================================
-# FUNCION CARGAR EXCEL
-# =====================================================
+# ---------------------------------------------------
+# FUNCION LEER EXCEL
+# ---------------------------------------------------
 
-@st.cache_data
-def load_excel(path):
+def cargar_excel(path):
 
     df = pd.read_excel(path)
     df.columns = df.columns.str.strip()
@@ -19,53 +17,54 @@ def load_excel(path):
     return df
 
 
-# =====================================================
-# CARGAR ARCHIVOS
-# =====================================================
+# ---------------------------------------------------
+# CARGAR BASES
+# ---------------------------------------------------
 
-users = load_excel("www/user-pass.xlsx")
-user_act = load_excel("www/user-act.xlsx")
-pi_actores = load_excel("www/pi-actores.xlsx")
-alineacion = load_excel("www/alineacion_pi.xlsx")
-tipo_accion = load_excel("www/tipo_accion.xlsx")
-tematicas = load_excel("www/tematicas.xlsx")
+users = cargar_excel("www/user-pass.xlsx")
+user_act = cargar_excel("www/user-act.xlsx")
+pi_actores = cargar_excel("www/pi-actores.xlsx")
+alineacion = cargar_excel("www/alineacion_pi.xlsx")
+tipo_accion = cargar_excel("www/tipo_accion.xlsx")
+tematicas = cargar_excel("www/tematicas.xlsx")
+
 
 opciones_tipo = tipo_accion.iloc[:,0].dropna().tolist()
 opciones_tematicas = tematicas.iloc[:,0].dropna().tolist()
 
 
-# =====================================================
-# HASH PASSWORD
-# =====================================================
+# ---------------------------------------------------
+# HASH TEMPORAL
+# ---------------------------------------------------
 
-if "hashed_users" not in st.session_state:
+if "hash_users" not in st.session_state:
 
-    hashed = {}
+    hashes = {}
 
     for _,row in users.iterrows():
 
-        hashed[row["user"]] = bcrypt.hashpw(
+        hashes[row["user"]] = bcrypt.hashpw(
             str(row["password"]).encode(),
             bcrypt.gensalt()
         )
 
-    st.session_state.hashed_users = hashed
+    st.session_state.hash_users = hashes
 
 
-# =====================================================
+# ---------------------------------------------------
 # LOGIN
-# =====================================================
+# ---------------------------------------------------
 
 if "login" not in st.session_state:
     st.session_state.login = False
 
 
-def check_password(user,password):
+def validar(user,password):
 
-    if user not in st.session_state.hashed_users:
+    if user not in st.session_state.hash_users:
         return False
 
-    hashed = st.session_state.hashed_users[user]
+    hashed = st.session_state.hash_users[user]
 
     return bcrypt.checkpw(password.encode(),hashed)
 
@@ -74,15 +73,15 @@ if not st.session_state.login:
 
     st.title("Sistema Estatal Anticorrupción")
 
-    user = st.text_input("Usuario")
+    usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Entrar"):
 
-        if check_password(user,password):
+        if validar(usuario,password):
 
             st.session_state.login = True
-            st.session_state.user = user
+            st.session_state.usuario = usuario
             st.rerun()
 
         else:
@@ -92,113 +91,58 @@ if not st.session_state.login:
     st.stop()
 
 
-# =====================================================
-# ACTOR
-# =====================================================
+# ---------------------------------------------------
+# ACTOR DEL USUARIO
+# ---------------------------------------------------
 
 actor_usuario = user_act.loc[
-    user_act["user"] == st.session_state.user,
+    user_act["user"] == st.session_state.usuario,
     "act"
 ].values[0]
 
 
-# =====================================================
-# FILTRAR LINEAS POR ACTOR
-# =====================================================
+# ---------------------------------------------------
+# LINEAS DEL ACTOR
+# ---------------------------------------------------
 
 lineas_actor = pi_actores.loc[
     pi_actores["Actor"] == actor_usuario,
-    "Linea_codigo"
+    "Línea de acción"
 ].unique()
 
+
 alineacion_actor = alineacion[
-    alineacion["Linea_codigo"].isin(lineas_actor)
+    alineacion["Línea de acción"].isin(lineas_actor)
 ]
 
 
-# =====================================================
+# ---------------------------------------------------
 # HEADER
-# =====================================================
+# ---------------------------------------------------
 
-col1,col2,col3 = st.columns([5,2,1])
+col1,col2 = st.columns([8,1])
 
 with col1:
-    st.title("Tablero de Implementación PNA")
+
+    st.image("logo_sea.png", width=120)
+    st.title("Reporte de Acciones 2025")
+    st.write("Programa de Implementación del PNA")
+
 
 with col2:
-    st.write(f"Usuario: {st.session_state.user}")
 
-with col3:
     if st.button("Cerrar sesión"):
+
         st.session_state.clear()
         st.rerun()
-
-
-# =====================================================
-# TABLA EN MEMORIA
-# =====================================================
-
-if "tabla" not in st.session_state:
-
-    st.session_state.tabla = pd.DataFrame(
-        columns=[
-            "Actor",
-            "Estrategia",
-            "Linea_codigo",
-            "Linea_texto",
-            "Accion",
-            "Inicio",
-            "Fin",
-            "Tipo",
-            "Tematica"
-        ]
-    )
-
-
-# =====================================================
-# KPI
-# =====================================================
-
-total = len(st.session_state.tabla)
-
-completadas = len(
-    st.session_state.tabla[
-        st.session_state.tabla["Fin"].notna()
-    ]
-)
-
-pendientes = total - completadas
-
-col1,col2,col3 = st.columns(3)
-
-col1.metric("Acciones registradas", total)
-col2.metric("Completadas", completadas)
-col3.metric("Pendientes", pendientes)
-
-
-# =====================================================
-# GRAFICA KPI
-# =====================================================
-
-if total > 0:
-
-    grafica = st.session_state.tabla.groupby(
-        "Estrategia"
-    ).size().reset_index(name="Acciones")
-
-    st.bar_chart(
-        grafica.set_index("Estrategia")
-    )
 
 
 st.divider()
 
 
-# =====================================================
-# FORMULARIO
-# =====================================================
-
-st.subheader("Agregar Acción")
+# ---------------------------------------------------
+# SELECTORES
+# ---------------------------------------------------
 
 estrategias = alineacion_actor["Estrategia"].unique()
 
@@ -207,45 +151,57 @@ estrategia = st.selectbox(
     estrategias
 )
 
+
 lineas = alineacion_actor.loc[
     alineacion_actor["Estrategia"] == estrategia,
-    "Linea_codigo"
+    "Línea de acción"
 ].unique()
 
+
 linea = st.selectbox(
-    "Línea de acción",
+    "Línea de Acción",
     lineas
 )
 
-linea_texto = alineacion_actor.loc[
-    alineacion_actor["Linea_codigo"] == linea,
-    "Linea_texto"
-].values[0]
 
-st.write(linea_texto)
+# ---------------------------------------------------
+# TABLA EN MEMORIA
+# ---------------------------------------------------
+
+if "tabla" not in st.session_state:
+
+    st.session_state.tabla = pd.DataFrame(
+        columns=[
+            "Estrategia",
+            "Línea de Acción",
+            "Acción",
+            "Inicio",
+            "Fin",
+            "Tipo de Acción",
+            "Temática"
+        ]
+    )
 
 
-# =====================================================
+# ---------------------------------------------------
 # BOTONES
-# =====================================================
+# ---------------------------------------------------
 
 col1,col2,col3 = st.columns(3)
 
 with col1:
 
-    if st.button("➕ Agregar Acción"):
+    if st.button("+ Agregar Acción"):
 
         nueva = {
 
-            "Actor":actor_usuario,
             "Estrategia":estrategia,
-            "Linea_codigo":linea,
-            "Linea_texto":linea_texto,
-            "Accion":"",
+            "Línea de Acción":linea,
+            "Acción":"",
             "Inicio":None,
             "Fin":None,
-            "Tipo":"",
-            "Tematica":""
+            "Tipo de Acción":"",
+            "Temática":""
         }
 
         st.session_state.tabla.loc[
@@ -255,49 +211,17 @@ with col1:
 
 with col2:
 
-    if st.button("Guardar borrador"):
-
-        buffer = io.BytesIO()
-
-        st.session_state.tabla.to_excel(
-            buffer,
-            index=False
-        )
-
-        st.download_button(
-            "Descargar",
-            buffer.getvalue(),
-            "borrador.xlsx"
-        )
+    st.button("Guardar Borrador")
 
 
 with col3:
 
-    if st.button("Enviar"):
-
-        buffer = io.BytesIO()
-
-        st.session_state.tabla.to_excel(
-            buffer,
-            index=False
-        )
-
-        dbx = dropbox.Dropbox(
-            st.secrets["DROPBOX_TOKEN"]
-        )
-
-        dbx.files_upload(
-            buffer.getvalue(),
-            f"/envios/{actor_usuario}.xlsx",
-            mode=dropbox.files.WriteMode.overwrite
-        )
-
-        st.success("Acciones enviadas")
+    st.button("Enviar")
 
 
-# =====================================================
+# ---------------------------------------------------
 # TABLA EDITABLE
-# =====================================================
+# ---------------------------------------------------
 
 if len(st.session_state.tabla) > 0:
 
@@ -311,18 +235,24 @@ if len(st.session_state.tabla) > 0:
 
         column_config={
 
-            "Inicio": st.column_config.DateColumn("Inicio"),
-            "Fin": st.column_config.DateColumn("Fin"),
+            "Inicio": st.column_config.DateColumn(
+                "Inicio"
+            ),
 
-            "Tipo": st.column_config.SelectboxColumn(
+            "Fin": st.column_config.DateColumn(
+                "Fin"
+            ),
+
+            "Tipo de Acción": st.column_config.SelectboxColumn(
                 "Tipo de Acción",
                 options=opciones_tipo
             ),
 
-            "Tematica": st.column_config.SelectboxColumn(
+            "Temática": st.column_config.SelectboxColumn(
                 "Temática",
                 options=opciones_tematicas
             )
+
         }
     )
 
