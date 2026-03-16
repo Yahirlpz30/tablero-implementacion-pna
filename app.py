@@ -1,89 +1,139 @@
 import streamlit as st
 import pandas as pd
+import dropbox
+import hashlib
 import plotly.express as px
 from datetime import datetime
 
-from services.dropbox_service import read_excel_dropbox, upload_excel_dropbox
-from services.lock_service import check_lock, create_lock, remove_lock
-
+# -----------------------------------
+# CONFIG
+# -----------------------------------
 
 st.set_page_config(
-    page_title="Tablero de Implementación",
-    layout="wide",
-    page_icon="www/favicon.png"
+    page_title="Tablero de Implementación PNA",
+    layout="wide"
 )
 
-st.image("www/logo_tablero.png", width=300)
+# -----------------------------------
+# DROPBOX
+# -----------------------------------
 
+DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
+dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+
+BASE_PATH = "/tablero_prueba/base.xlsx"
+
+# -----------------------------------
+# FUNCIONES DROPBOX
+# -----------------------------------
+
+def read_dropbox_excel(path):
+    metadata, res = dbx.files_download(path)
+    return pd.read_excel(res.content)
+
+def upload_dropbox_excel(df, path):
+    import io
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    dbx.files_upload(
+        buffer.read(),
+        path,
+        mode=dropbox.files.WriteMode.overwrite
+    )
+
+# -----------------------------------
 # LOGIN
+# -----------------------------------
 
 users = pd.read_excel("www/user-pass.xlsx")
-user_act = pd.read_excel("www/user-act.xlsx")
+user_actor = pd.read_excel("www/user-act.xlsx")
 
-if "logged" not in st.session_state:
-    st.session_state.logged = False
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-if not st.session_state.logged:
+st.sidebar.title("Login")
 
-    st.title("Inicio de sesión")
+username = st.sidebar.text_input("Usuario")
+password = st.sidebar.text_input("Contraseña", type="password")
 
-    user = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
+if "login" not in st.session_state:
+    st.session_state.login = False
 
-    if st.button("Ingresar"):
+if st.sidebar.button("Ingresar"):
 
-        check = users[
-            (users["user"] == user) &
-            (users["password"] == password)
-        ]
+    user = users[users["user"] == username]
 
-        if len(check) > 0:
+    if len(user) > 0:
+        stored = user.iloc[0]["password"]
 
-            st.session_state.logged = True
-            st.session_state.user = user
+        if hash_password(password) == stored:
+            st.session_state.login = True
+            st.session_state.user = username
 
-            actor = user_act[user_act["user"] == user]["act"].values[0]
-
-            st.session_state.actor = actor
-
-            st.rerun()
-
-        else:
-
-            st.error("Usuario o contraseña incorrectos")
-
+if not st.session_state.login:
     st.stop()
 
+# -----------------------------------
+# ACTOR
+# -----------------------------------
 
-@st.cache_data
-def load_data():
-    return read_excel_dropbox("/tablero_prueba/base.xlsx")
+actor = user_actor[
+    user_actor["user"] == st.session_state.user
+]["act"].values[0]
 
-data = load_data()
+# -----------------------------------
+# CARGAR DATOS
+# -----------------------------------
 
-actor_usuario = st.session_state.actor
+alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+actores = pd.read_excel("www/pi-actores.xlsx")
 
-st.title("Tablero de Implementación")
+estructura = actores.merge(
+    alineacion,
+    on="Línea de acción",
+    how="left"
+)
 
-st.write("Institución:", actor_usuario)
+data = read_dropbox_excel(BASE_PATH)
 
+# -----------------------------------
+# HEADER
+# -----------------------------------
 
+col1, col2 = st.columns([1,4])
+
+with col1:
+    st.image("www/logo_tablero.png", width=200)
+
+with col2:
+    st.title("Reporte de Acciones 2025")
+    st.caption("Programa de Implementación del PNA")
+
+st.divider()
+
+# -----------------------------------
 # KPIs
+# -----------------------------------
 
-total = len(data)
+total_acciones = len(data)
 
 reportadas = (data["Acción reportada"] != "Por reportar").sum()
 
-avance = round((reportadas / total) * 100, 2)
+avance = round(reportadas / total_acciones * 100,2)
 
-k1, k2, k3 = st.columns(3)
+k1,k2,k3 = st.columns(3)
 
-k1.metric("Total acciones", total)
+k1.metric("Total acciones", total_acciones)
 k2.metric("Acciones reportadas", reportadas)
 k3.metric("Avance %", avance)
 
+st.divider()
 
-# Ranking
+# -----------------------------------
+# RANKING
+# -----------------------------------
 
 ranking = (
     data.groupby("Actor")
@@ -95,35 +145,51 @@ fig = px.bar(
     ranking,
     x="Actor",
     y="avance",
-    title="Ranking de avance",
-    color="avance"
+    title="Ranking de avance por institución",
+    color="avance",
+    color_continuous_scale="Blues"
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
+st.divider()
 
-# FILTROS
+# -----------------------------------
+# FILTRAR ACTOR
+# -----------------------------------
 
-df_actor = data[data["Actor"] == actor_usuario]
-
-estrategias = sorted(df_actor["No. Estrategia"].unique())
-
-estrategia = st.selectbox("Estrategia", estrategias)
-
-df_estrategia = df_actor[
-    df_actor["No. Estrategia"] == estrategia
+df_actor = estructura[
+    estructura["Actor"] == actor
 ]
 
-lineas = sorted(df_estrategia["No. Línea de acción"].unique())
+estrategias = sorted(df_actor["Estrategia"].unique())
 
-linea = st.selectbox("Línea de acción", lineas)
+estrategia = st.selectbox(
+    "Estrategia",
+    estrategias
+)
 
-df_linea = df_estrategia[
-    df_estrategia["No. Línea de acción"] == linea
+df_est = df_actor[
+    df_actor["Estrategia"] == estrategia
 ]
 
+lineas = sorted(df_est["Línea de acción"].unique())
 
-# TABLA EDITABLE
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
+
+df_linea = data[
+    (data["Actor"] == actor) &
+    (data["Línea de acción"] == linea)
+]
+
+st.divider()
+
+# -----------------------------------
+# TABLA
+# -----------------------------------
 
 edited = st.data_editor(
     df_linea,
@@ -131,54 +197,510 @@ edited = st.data_editor(
     use_container_width=True
 )
 
+# -----------------------------------
+# BOTONES
+# -----------------------------------
 
-# GUARDAR
+c1,c2 = st.columns(2)
 
-if st.button("Guardar cambios"):
-
-    if check_lock():
-
-        st.warning("Otro usuario está guardando datos. Intente nuevamente.")
-
-        st.stop()
-
-    create_lock()
-
-    try:
+with c1:
+    if st.button("Guardar borrador"):
 
         restante = data[
-            data["No. Línea de acción"] != linea
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
         ]
 
         nuevo = pd.concat([restante, edited])
 
-        upload_excel_dropbox(
-            nuevo,
-            "/tablero_prueba/base.xlsx"
-        )
+        upload_dropbox_excel(nuevo, BASE_PATH)
 
-        snapshot = (
-            "/tablero_prueba/snaps/"
-            + actor_usuario
-            + "_"
-            + datetime.now().strftime("%Y%m%d_%H%M")
-            + ".xlsx"
-        )
+        st.success("Guardado correctamente")
 
-        upload_excel_dropbox(
-            edited,
-            snapshot
-        )
+with c2:
+    if st.button("Enviar"):
 
-        st.success("Información guardada correctamente")
+        restante = data[
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
+        ]
 
-        st.cache_data.clear()
+        nuevo = pd.concat([restante, edited])
 
-    except Exception as e:
+        upload_dropbox_excel(nuevo, BASE_PATH)
 
-        st.error("Error guardando información")
-        st.write(e)
+        st.success("Acciones enviadas")import streamlit as st
+import pandas as pd
+import dropbox
+import hashlib
+import plotly.express as px
+from datetime import datetime
 
-    finally:
+# -----------------------------------
+# CONFIG
+# -----------------------------------
 
-        remove_lock()
+st.set_page_config(
+    page_title="Tablero de Implementación PNA",
+    layout="wide"
+)
+
+# -----------------------------------
+# DROPBOX
+# -----------------------------------
+
+DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
+dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+
+BASE_PATH = "/tablero_prueba/base.xlsx"
+
+# -----------------------------------
+# FUNCIONES DROPBOX
+# -----------------------------------
+
+def read_dropbox_excel(path):
+    metadata, res = dbx.files_download(path)
+    return pd.read_excel(res.content)
+
+def upload_dropbox_excel(df, path):
+    import io
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    dbx.files_upload(
+        buffer.read(),
+        path,
+        mode=dropbox.files.WriteMode.overwrite
+    )
+
+# -----------------------------------
+# LOGIN
+# -----------------------------------
+
+users = pd.read_excel("www/user-pass.xlsx")
+user_actor = pd.read_excel("www/user-act.xlsx")
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+st.sidebar.title("Login")
+
+username = st.sidebar.text_input("Usuario")
+password = st.sidebar.text_input("Contraseña", type="password")
+
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+if st.sidebar.button("Ingresar"):
+
+    user = users[users["user"] == username]
+
+    if len(user) > 0:
+        stored = user.iloc[0]["password"]
+
+        if hash_password(password) == stored:
+            st.session_state.login = True
+            st.session_state.user = username
+
+if not st.session_state.login:
+    st.stop()
+
+# -----------------------------------
+# ACTOR
+# -----------------------------------
+
+actor = user_actor[
+    user_actor["user"] == st.session_state.user
+]["act"].values[0]
+
+# -----------------------------------
+# CARGAR DATOS
+# -----------------------------------
+
+alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+actores = pd.read_excel("www/pi-actores.xlsx")
+
+estructura = actores.merge(
+    alineacion,
+    on="Línea de acción",
+    how="left"
+)
+
+data = read_dropbox_excel(BASE_PATH)
+
+# -----------------------------------
+# HEADER
+# -----------------------------------
+
+col1, col2 = st.columns([1,4])
+
+with col1:
+    st.image("www/logo_tablero.png", width=200)
+
+with col2:
+    st.title("Reporte de Acciones 2025")
+    st.caption("Programa de Implementación del PNA")
+
+st.divider()
+
+# -----------------------------------
+# KPIs
+# -----------------------------------
+
+total_acciones = len(data)
+
+reportadas = (data["Acción reportada"] != "Por reportar").sum()
+
+avance = round(reportadas / total_acciones * 100,2)
+
+k1,k2,k3 = st.columns(3)
+
+k1.metric("Total acciones", total_acciones)
+k2.metric("Acciones reportadas", reportadas)
+k3.metric("Avance %", avance)
+
+st.divider()
+
+# -----------------------------------
+# RANKING
+# -----------------------------------
+
+ranking = (
+    data.groupby("Actor")
+    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean()*100)
+    .reset_index(name="avance")
+)
+
+fig = px.bar(
+    ranking,
+    x="Actor",
+    y="avance",
+    title="Ranking de avance por institución",
+    color="avance",
+    color_continuous_scale="Blues"
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+# -----------------------------------
+# FILTRAR ACTOR
+# -----------------------------------
+
+df_actor = estructura[
+    estructura["Actor"] == actor
+]
+
+estrategias = sorted(df_actor["Estrategia"].unique())
+
+estrategia = st.selectbox(
+    "Estrategia",
+    estrategias
+)
+
+df_est = df_actor[
+    df_actor["Estrategia"] == estrategia
+]
+
+lineas = sorted(df_est["Línea de acción"].unique())
+
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
+
+df_linea = data[
+    (data["Actor"] == actor) &
+    (data["Línea de acción"] == linea)
+]
+
+st.divider()
+
+# -----------------------------------
+# TABLA
+# -----------------------------------
+
+edited = st.data_editor(
+    df_linea,
+    num_rows="dynamic",
+    use_container_width=True
+)
+
+# -----------------------------------
+# BOTONES
+# -----------------------------------
+
+c1,c2 = st.columns(2)
+
+with c1:
+    if st.button("Guardar borrador"):
+
+        restante = data[
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
+        ]
+
+        nuevo = pd.concat([restante, edited])
+
+        upload_dropbox_excel(nuevo, BASE_PATH)
+
+        st.success("Guardado correctamente")
+
+with c2:
+    if st.button("Enviar"):
+
+        restante = data[
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
+        ]
+
+        nuevo = pd.concat([restante, edited])
+
+        upload_dropbox_excel(nuevo, BASE_PATH)
+
+        st.success("Acciones enviadas")import streamlit as st
+import pandas as pd
+import dropbox
+import hashlib
+import plotly.express as px
+from datetime import datetime
+
+# -----------------------------------
+# CONFIG
+# -----------------------------------
+
+st.set_page_config(
+    page_title="Tablero de Implementación PNA",
+    layout="wide"
+)
+
+# -----------------------------------
+# DROPBOX
+# -----------------------------------
+
+DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
+dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+
+BASE_PATH = "/tablero_prueba/base.xlsx"
+
+# -----------------------------------
+# FUNCIONES DROPBOX
+# -----------------------------------
+
+def read_dropbox_excel(path):
+    metadata, res = dbx.files_download(path)
+    return pd.read_excel(res.content)
+
+def upload_dropbox_excel(df, path):
+    import io
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    dbx.files_upload(
+        buffer.read(),
+        path,
+        mode=dropbox.files.WriteMode.overwrite
+    )
+
+# -----------------------------------
+# LOGIN
+# -----------------------------------
+
+users = pd.read_excel("www/user-pass.xlsx")
+user_actor = pd.read_excel("www/user-act.xlsx")
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+st.sidebar.title("Login")
+
+username = st.sidebar.text_input("Usuario")
+password = st.sidebar.text_input("Contraseña", type="password")
+
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+if st.sidebar.button("Ingresar"):
+
+    user = users[users["user"] == username]
+
+    if len(user) > 0:
+        stored = user.iloc[0]["password"]
+
+        if hash_password(password) == stored:
+            st.session_state.login = True
+            st.session_state.user = username
+
+if not st.session_state.login:
+    st.stop()
+
+# -----------------------------------
+# ACTOR
+# -----------------------------------
+
+actor = user_actor[
+    user_actor["user"] == st.session_state.user
+]["act"].values[0]
+
+# -----------------------------------
+# CARGAR DATOS
+# -----------------------------------
+
+alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+actores = pd.read_excel("www/pi-actores.xlsx")
+
+estructura = actores.merge(
+    alineacion,
+    on="Línea de acción",
+    how="left"
+)
+
+data = read_dropbox_excel(BASE_PATH)
+
+# -----------------------------------
+# HEADER
+# -----------------------------------
+
+col1, col2 = st.columns([1,4])
+
+with col1:
+    st.image("www/logo_tablero.png", width=200)
+
+with col2:
+    st.title("Reporte de Acciones 2025")
+    st.caption("Programa de Implementación del PNA")
+
+st.divider()
+
+# -----------------------------------
+# KPIs
+# -----------------------------------
+
+total_acciones = len(data)
+
+reportadas = (data["Acción reportada"] != "Por reportar").sum()
+
+avance = round(reportadas / total_acciones * 100,2)
+
+k1,k2,k3 = st.columns(3)
+
+k1.metric("Total acciones", total_acciones)
+k2.metric("Acciones reportadas", reportadas)
+k3.metric("Avance %", avance)
+
+st.divider()
+
+# -----------------------------------
+# RANKING
+# -----------------------------------
+
+ranking = (
+    data.groupby("Actor")
+    .apply(lambda x: (x["Acción reportada"] != "Por reportar").mean()*100)
+    .reset_index(name="avance")
+)
+
+fig = px.bar(
+    ranking,
+    x="Actor",
+    y="avance",
+    title="Ranking de avance por institución",
+    color="avance",
+    color_continuous_scale="Blues"
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+# -----------------------------------
+# FILTRAR ACTOR
+# -----------------------------------
+
+df_actor = estructura[
+    estructura["Actor"] == actor
+]
+
+estrategias = sorted(df_actor["Estrategia"].unique())
+
+estrategia = st.selectbox(
+    "Estrategia",
+    estrategias
+)
+
+df_est = df_actor[
+    df_actor["Estrategia"] == estrategia
+]
+
+lineas = sorted(df_est["Línea de acción"].unique())
+
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
+
+df_linea = data[
+    (data["Actor"] == actor) &
+    (data["Línea de acción"] == linea)
+]
+
+st.divider()
+
+# -----------------------------------
+# TABLA
+# -----------------------------------
+
+edited = st.data_editor(
+    df_linea,
+    num_rows="dynamic",
+    use_container_width=True
+)
+
+# -----------------------------------
+# BOTONES
+# -----------------------------------
+
+c1,c2 = st.columns(2)
+
+with c1:
+    if st.button("Guardar borrador"):
+
+        restante = data[
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
+        ]
+
+        nuevo = pd.concat([restante, edited])
+
+        upload_dropbox_excel(nuevo, BASE_PATH)
+
+        st.success("Guardado correctamente")
+
+with c2:
+    if st.button("Enviar"):
+
+        restante = data[
+            ~(
+                (data["Actor"] == actor) &
+                (data["Línea de acción"] == linea)
+            )
+        ]
+
+        nuevo = pd.concat([restante, edited])
+
+        upload_dropbox_excel(nuevo, BASE_PATH)
+
+        st.success("Acciones enviadas")
