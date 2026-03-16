@@ -14,8 +14,8 @@ DROPBOX_TOKEN = st.secrets["DROPBOX_TOKEN"]
 
 dbx = dropbox.Dropbox(DROPBOX_TOKEN)
 
-ARCHIVO_ACCIONES = "/acciones_2025.xlsx"
-ARCHIVO_LOCK = "/lock_acciones.txt"
+ARCHIVO_ACCIONES = "/tablero_prueba/base.xlsx"
+ARCHIVO_LOCK = "/tablero_prueba/lock_base.txt"
 
 
 # -----------------------------
