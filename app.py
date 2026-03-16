@@ -5,6 +5,13 @@ import hashlib
 import plotly.express as px
 from datetime import datetime
 
+# -------------------------------
+# INICIALIZAR SESSION STATE
+# -------------------------------
+
+if "login" not in st.session_state:
+    st.session_state["login"] = False
+
 # -----------------------------------
 # CONFIG
 # -----------------------------------
