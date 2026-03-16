@@ -223,20 +223,20 @@ with col2:
 with col3:
     if st.session_state.ultimo_guardado:
 
-    diff = datetime.datetime.now() - st.session_state.ultimo_guardado
-    minutos = int(diff.total_seconds() / 60)
-
-    if minutos == 0:
-        mensaje = "Guardado: hace unos segundos"
-    elif minutos == 1:
-        mensaje = "Guardado: hace 1 minuto"
+        diff = datetime.datetime.now() - st.session_state.ultimo_guardado
+        minutos = int(diff.total_seconds() / 60)
+    
+        if minutos == 0:
+            mensaje = "Guardado: hace unos segundos"
+        elif minutos == 1:
+            mensaje = "Guardado: hace 1 minuto"
+        else:
+            mensaje = f"Guardado: hace {minutos} minutos"
+    
+        st.write(mensaje)
+    
     else:
-        mensaje = f"Guardado: hace {minutos} minutos"
-
-    st.write(mensaje)
-
-else:
-    st.write("Guardado: aún no se ha guardado")
+        st.write("Guardado: aún no se ha guardado")
 
 
 # -----------------------------
