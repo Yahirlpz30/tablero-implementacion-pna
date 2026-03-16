@@ -30,17 +30,12 @@ alineacion = load_excel("www/alineacion_pi.xlsx")
 tipo_accion = load_excel("www/tipo_accion.xlsx")
 tematicas = load_excel("www/tematicas.xlsx")
 
-
-# =====================================================
-# CATALOGOS
-# =====================================================
-
 opciones_tipo = tipo_accion.iloc[:,0].dropna().tolist()
 opciones_tematicas = tematicas.iloc[:,0].dropna().tolist()
 
 
 # =====================================================
-# HASH DE CONTRASEÑAS EN MEMORIA
+# HASH PASSWORD
 # =====================================================
 
 if "hashed_users" not in st.session_state:
@@ -88,7 +83,6 @@ if not st.session_state.login:
 
             st.session_state.login = True
             st.session_state.user = user
-
             st.rerun()
 
         else:
@@ -99,7 +93,7 @@ if not st.session_state.login:
 
 
 # =====================================================
-# ACTOR DEL USUARIO
+# ACTOR
 # =====================================================
 
 actor_usuario = user_act.loc[
@@ -109,14 +103,13 @@ actor_usuario = user_act.loc[
 
 
 # =====================================================
-# LINEAS PERMITIDAS
+# FILTRAR LINEAS POR ACTOR
 # =====================================================
 
 lineas_actor = pi_actores.loc[
     pi_actores["Actor"] == actor_usuario,
     "Linea_codigo"
 ].unique()
-
 
 alineacion_actor = alineacion[
     alineacion["Linea_codigo"].isin(lineas_actor)
@@ -130,53 +123,15 @@ alineacion_actor = alineacion[
 col1,col2,col3 = st.columns([5,2,1])
 
 with col1:
-    st.title("Reporte de Acciones 2025")
+    st.title("Tablero de Implementación PNA")
 
 with col2:
     st.write(f"Usuario: {st.session_state.user}")
 
 with col3:
-
     if st.button("Cerrar sesión"):
-
         st.session_state.clear()
         st.rerun()
-
-
-st.divider()
-
-
-# =====================================================
-# SELECTORES
-# =====================================================
-
-estrategias = alineacion_actor["Estrategia"].unique()
-
-estrategia = st.selectbox(
-    "Estrategia",
-    estrategias
-)
-
-
-lineas = alineacion_actor.loc[
-    alineacion_actor["Estrategia"] == estrategia,
-    "Linea_codigo"
-].unique()
-
-
-linea = st.selectbox(
-    "Línea de acción",
-    lineas
-)
-
-
-linea_texto = alineacion_actor.loc[
-    alineacion_actor["Linea_codigo"] == linea,
-    "Linea_texto"
-].values[0]
-
-
-st.write(linea_texto)
 
 
 # =====================================================
@@ -201,6 +156,76 @@ if "tabla" not in st.session_state:
 
 
 # =====================================================
+# KPI
+# =====================================================
+
+total = len(st.session_state.tabla)
+
+completadas = len(
+    st.session_state.tabla[
+        st.session_state.tabla["Fin"].notna()
+    ]
+)
+
+pendientes = total - completadas
+
+col1,col2,col3 = st.columns(3)
+
+col1.metric("Acciones registradas", total)
+col2.metric("Completadas", completadas)
+col3.metric("Pendientes", pendientes)
+
+
+# =====================================================
+# GRAFICA KPI
+# =====================================================
+
+if total > 0:
+
+    grafica = st.session_state.tabla.groupby(
+        "Estrategia"
+    ).size().reset_index(name="Acciones")
+
+    st.bar_chart(
+        grafica.set_index("Estrategia")
+    )
+
+
+st.divider()
+
+
+# =====================================================
+# FORMULARIO
+# =====================================================
+
+st.subheader("Agregar Acción")
+
+estrategias = alineacion_actor["Estrategia"].unique()
+
+estrategia = st.selectbox(
+    "Estrategia",
+    estrategias
+)
+
+lineas = alineacion_actor.loc[
+    alineacion_actor["Estrategia"] == estrategia,
+    "Linea_codigo"
+].unique()
+
+linea = st.selectbox(
+    "Línea de acción",
+    lineas
+)
+
+linea_texto = alineacion_actor.loc[
+    alineacion_actor["Linea_codigo"] == linea,
+    "Linea_texto"
+].values[0]
+
+st.write(linea_texto)
+
+
+# =====================================================
 # BOTONES
 # =====================================================
 
@@ -212,15 +237,15 @@ with col1:
 
         nueva = {
 
-            "Actor": actor_usuario,
-            "Estrategia": estrategia,
-            "Linea_codigo": linea,
-            "Linea_texto": linea_texto,
-            "Accion": "",
-            "Inicio": None,
-            "Fin": None,
-            "Tipo": "",
-            "Tematica": ""
+            "Actor":actor_usuario,
+            "Estrategia":estrategia,
+            "Linea_codigo":linea,
+            "Linea_texto":linea_texto,
+            "Accion":"",
+            "Inicio":None,
+            "Fin":None,
+            "Tipo":"",
+            "Tematica":""
         }
 
         st.session_state.tabla.loc[
@@ -230,7 +255,7 @@ with col1:
 
 with col2:
 
-    if st.button("Guardar Borrador"):
+    if st.button("Guardar borrador"):
 
         buffer = io.BytesIO()
 
@@ -240,9 +265,9 @@ with col2:
         )
 
         st.download_button(
-            "Descargar borrador",
+            "Descargar",
             buffer.getvalue(),
-            file_name="borrador.xlsx"
+            "borrador.xlsx"
         )
 
 
@@ -270,9 +295,6 @@ with col3:
         st.success("Acciones enviadas")
 
 
-st.divider()
-
-
 # =====================================================
 # TABLA EDITABLE
 # =====================================================
@@ -289,13 +311,8 @@ if len(st.session_state.tabla) > 0:
 
         column_config={
 
-            "Inicio": st.column_config.DateColumn(
-                "Inicio"
-            ),
-
-            "Fin": st.column_config.DateColumn(
-                "Fin"
-            ),
+            "Inicio": st.column_config.DateColumn("Inicio"),
+            "Fin": st.column_config.DateColumn("Fin"),
 
             "Tipo": st.column_config.SelectboxColumn(
                 "Tipo de Acción",
@@ -306,7 +323,6 @@ if len(st.session_state.tabla) > 0:
                 "Temática",
                 options=opciones_tematicas
             )
-
         }
     )
 
