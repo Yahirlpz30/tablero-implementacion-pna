@@ -144,7 +144,7 @@ actores_df = pd.read_excel("www/user-act.xlsx")
 actor_usuario = actores_df[actores_df["user"] == st.session_state.user]
 
 if len(actor_usuario) > 0:
-    actor = actor_usuario.iloc[0]["actor"]
+    actor = actor_usuario.iloc[0]["act"]
 else:
     actor = "Sin actor"
 
