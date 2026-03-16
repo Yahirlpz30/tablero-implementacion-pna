@@ -43,19 +43,26 @@ def subir_excel(df):
         mode=dropbox.files.WriteMode.overwrite
     )
 
-
 def crear_lock(usuario):
 
     try:
+
+        # eliminar lock anterior si existe
+        try:
+            dbx.files_delete_v2(ARCHIVO_LOCK)
+        except:
+            pass
+
         dbx.files_upload(
             usuario.encode(),
             ARCHIVO_LOCK,
-            mode=dropbox.files.WriteMode.add
+            mode=dropbox.files.WriteMode.overwrite
         )
+
         return True
+
     except:
         return False
-
 
 def liberar_lock():
 
