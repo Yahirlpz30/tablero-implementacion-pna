@@ -14,26 +14,38 @@ st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 
-section[data-testid="stSidebar"] {
-    background-color: #f7f9fb;
-}
-
-.card {
+/* TABLA TIPO DASHBOARD */
+.card-tabla {
     background: white;
-    padding: 20px;
     border-radius: 12px;
-    border: 1px solid #eee;
+    border: 1px solid #e6e6e6;
+    padding: 15px;
+    margin-top: 10px;
 }
 
-.fila {
+/* HEADER */
+.header-tabla {
+    font-weight: 600;
+    color: #555;
+    border-bottom: 2px solid #e6e6e6;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+/* FILAS */
+.fila-tabla {
     border-bottom: 1px solid #eee;
-    padding: 8px 0;
+    padding: 10px 0;
 }
 
-.stButton>button {
-    border-radius: 8px;
-    height: 40px;
-    font-weight: 500;
+/* SOLUCIÓN DROPDOWN (CLAVE) */
+div[data-baseweb="popover"] {
+    z-index: 999999 !important;
+}
+
+/* ESPACIO ENTRE FILAS */
+.bloque-fila {
+    margin-bottom: 15px;
 }
 
 </style>
@@ -191,46 +203,62 @@ if add:
 # =========================
 # TABLA PRO
 # =========================
-st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<div class="card-tabla">', unsafe_allow_html=True)
 
-h0,h1,h2,h3,h4,h5,h6,h7,h8 = st.columns([1,2,3,3,2,2,2,2,1])
-h1.markdown("*Estrategia*")
-h2.markdown("*Línea de acción*")
-h3.markdown("*Acción*")
-h4.markdown("*Inicio*")
-h5.markdown("*Fin*")
-h6.markdown("*Tipo de acción*")
-h7.markdown("*Temática*")
+st.markdown("### Acciones")
+
+# HEADER
+h1,h2,h3,h4,h5,h6,h7,h8 = st.columns([2,3,3,2,2,2,2,1])
+
+h1.markdown('<div class="header-tabla">Estrategia</div>', unsafe_allow_html=True)
+h2.markdown('<div class="header-tabla">Línea de acción</div>', unsafe_allow_html=True)
+h3.markdown('<div class="header-tabla">Acción</div>', unsafe_allow_html=True)
+h4.markdown('<div class="header-tabla">Inicio</div>', unsafe_allow_html=True)
+h5.markdown('<div class="header-tabla">Fin</div>', unsafe_allow_html=True)
+h6.markdown('<div class="header-tabla">Tipo de Acción</div>', unsafe_allow_html=True)
+h7.markdown('<div class="header-tabla">Temática</div>', unsafe_allow_html=True)
+h8.markdown("")
 
 rows_delete = []
 
 for i in range(len(st.session_state.tabla)):
 
-    st.markdown('<div class="fila">', unsafe_allow_html=True)
+    st.markdown('<div class="bloque-fila">', unsafe_allow_html=True)
 
-    c0,c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([1,2,3,3,2,2,2,2,1])
+    c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([2,3,3,2,2,2,2,1])
 
-    c0.checkbox("", key=f"check_{i}")
+    estrategia = c1.selectbox(
+        "",
+        [""] + estrategias,
+        key=f"estr_{i}"
+    )
 
-    estrategia = c1.selectbox("", [""] + estrategias, key=f"estr_{i}")
+    lineas = alineacion_filtrada[
+        alineacion_filtrada["Estrategia"] == estrategia
+    ]["Línea de acción"].unique() if estrategia else []
 
-    lineas = alineacion[alineacion["Estrategia"] == estrategia]["Línea de acción"].unique() if estrategia else []
-    linea = c2.selectbox("", [""] + list(lineas), key=f"lin_{i}")
+    linea = c2.selectbox(
+        "",
+        [""] + list(lineas),
+        key=f"lin_{i}"
+    )
 
     accion = c3.text_input("", key=f"acc_{i}")
-    inicio = c4.date_input("", key=f"ini_{i}")
-    fin = c5.date_input("", key=f"fin_{i}")
+
+    inicio = c4.date_input("", value=datetime.date.today(), key=f"ini_{i}")
+    fin = c5.date_input("", value=datetime.date.today(), key=f"fin_{i}")
 
     tipo = c6.selectbox("", [""] + lista_tipo_accion, key=f"tipo_{i}")
     tem = c7.selectbox("", [""] + lista_tematicas, key=f"tem_{i}")
 
     delete = c8.button("🗑️", key=f"del_{i}")
+
     if delete:
         rows_delete.append(i)
 
     st.session_state.tabla.loc[i] = [
-        estrategia,linea,accion,inicio,fin,
-        tipo,tem,actor,usuario,2025
+        estrategia, linea, accion, inicio, fin,
+        tipo, tem, actor if actor else "", usuario, 2025
     ]
 
     st.markdown('</div>', unsafe_allow_html=True)
