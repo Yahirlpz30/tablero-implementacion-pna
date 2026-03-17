@@ -50,7 +50,7 @@ def read_base(dbx):
 
 def write_base(dbx, df):
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(buffer) as writer:
         df.to_excel(writer, index=False)
     buffer.seek(0)
     dbx.files_upload(buffer.read(), DROPBOX_FILE, mode=dropbox.files.WriteMode.overwrite)
