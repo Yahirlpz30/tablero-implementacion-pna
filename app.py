@@ -126,6 +126,20 @@ if not st.session_state.login:
 # CARGA EXCEL
 # =========================
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+
+# -------------------------
+# ORDENAR
+# -------------------------
+def ordenar_estrategia(x):
+    try:
+        return float(x.split()[0])
+    except:
+        return 999
+
+estrategias = sorted(
+    alineacion["Estrategia"].dropna().unique(),
+    key=ordenar_estrategia
+)
 actores = pd.read_excel("www/pi-actores.xlsx")
 
 usuario = st.session_state.usuario
