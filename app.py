@@ -130,6 +130,13 @@ users = pd.read_excel("www/user-pass.xlsx")
 
 if not st.session_state.login:
 
+    col_logo, col_title = st.columns([1,3])
+
+with col_logo:
+    if os.path.exists("www/logo_tablero.png"):
+        st.image("www/logo_tablero.png", width=120)
+
+with col_title:
     st.title("INICIAR SESIÓN")
 
     u = st.text_input("Usuario")
@@ -151,7 +158,7 @@ if not st.session_state.login:
 # SIDEBAR
 # =========================
 with st.sidebar:
-    st.markdown("## 📅 2025")
+    st.markdown("# 2025")
 
 # =========================
 # DATA
@@ -180,7 +187,17 @@ actor = usuario
 # =========================
 # HEADER
 # =========================
-st.title("Sistema Estatal Anticorrupción")
+col1, col2, col3 = st.columns([1,6,2])
+
+with col1:
+    if os.path.exists("www/logo_tablero.png"):
+        st.image("www/logo_tablero.png", width=140)
+
+with col2:
+    st.markdown("## Sistema Estatal Anticorrupción")
+
+with col3:
+    st.write(f"Usuario: {st.session_state.usuario}")
 
 # =========================
 # BOTONES
