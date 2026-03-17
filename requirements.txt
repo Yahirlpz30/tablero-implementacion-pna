@@ -6,4 +6,3 @@ dropbox
 openpyxl
 python-dotenv
 bcrypt
-xlswriter
