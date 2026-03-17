@@ -285,7 +285,7 @@ else:
 st.info(f"Año: 2025 | Acciones: {acciones} | Guardado: {msg_guardado}")
 
 # =========================
-# TABLA (SIEMPRE VISIBLE)
+# TABLA (MEJORADA UX)
 # =========================
 st.markdown("### Acciones")
 
@@ -293,53 +293,101 @@ rows_delete = []
 
 for i in range(len(st.session_state.tabla)):
 
-    r = st.session_state.tabla.loc[i]
+    with st.container():   # 🔥 evita que se encimen los dropdowns
 
-    c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([2,3,3,2,2,2,2,1])
+        r = st.session_state.tabla.loc[i]
 
-    estrategia = c1.selectbox(
-        "Estrategia",
-        [""] + estrategias,
-        key=f"estr_{i}"
-    )
+        c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([3,3,3,2,2,2,2,1])
 
-    lineas = alineacion_filtrada[
-        alineacion_filtrada["Estrategia"] == estrategia
-    ]["Línea de acción"].unique() if estrategia else []
+        # -------------------------
+        # Estrategia
+        # -------------------------
+        estrategia = c1.selectbox(
+            "Estrategia",
+            [""] + estrategias,
+            key=f"estr_{i}"
+        )
 
-    linea = c2.selectbox(
-        "Línea de acción",
-        [""] + list(lineas),
-        key=f"lin_{i}"
-    )
+        # -------------------------
+        # Línea de acción
+        # -------------------------
+        lineas = alineacion_filtrada[
+            alineacion_filtrada["Estrategia"] == estrategia
+        ]["Línea de acción"].unique() if estrategia else []
 
-    accion = c3.text_input("Acción",key=f"acc_{i}")
-    inicio = c4.date_input("Inicio",value=datetime.date.today(),key=f"ini_{i}")
-    fin = c5.date_input("Fin",value=datetime.date.today(),key=f"fin_{i}")
-    tipo = c6.selectbox(
-        "Tipo de Acción",
-        [""] + list(lista_tipo_accion),
-        key=f"tipo_{i}"
-    )
-    
-    tem = c7.selectbox(
-        "Temática",
-        [""] + list(lista_tematicas),
-        key=f"tem_{i}"
-    )
+        linea = c2.selectbox(
+            "Línea de acción",
+            [""] + list(lineas),
+            key=f"lin_{i}"
+        )
 
-    delete = c8.button("🗑️",key=f"del_{i}")
+        # -------------------------
+        # Acción
+        # -------------------------
+        accion = c3.text_input(
+            "Acción",
+            value=r["Acción"],
+            key=f"acc_{i}"
+        )
 
-    if delete:
-        rows_delete.append(i)
+        # -------------------------
+        # Fechas
+        # -------------------------
+        inicio = c4.date_input(
+            "Inicio",
+            value=datetime.date.today(),
+            key=f"ini_{i}"
+        )
 
-    st.session_state.tabla.loc[i] = [
-        estrategia,linea,accion,inicio,fin,tipo,tem,actor if actor else "",usuario,2025
-    ]
+        fin = c5.date_input(
+            "Fin",
+            value=datetime.date.today(),
+            key=f"fin_{i}"
+        )
 
+        # -------------------------
+        # Tipo de Acción
+        # -------------------------
+        tipo = c6.selectbox(
+            "Tipo de Acción",
+            [""] + list(lista_tipo_accion),
+            key=f"tipo_{i}"
+        )
+
+        # -------------------------
+        # Temática
+        # -------------------------
+        tem = c7.selectbox(
+            "Temática",
+            [""] + list(lista_tematicas),
+            key=f"tem_{i}"
+        )
+
+        # -------------------------
+        # Botón eliminar
+        # -------------------------
+        delete = c8.button("🗑️", key=f"del_{i}")
+
+        if delete:
+            rows_delete.append(i)
+
+        # -------------------------
+        # Guardar en session
+        # -------------------------
+        st.session_state.tabla.loc[i] = [
+            estrategia, linea, accion, inicio, fin, tipo, tem,
+            actor if actor else "", usuario, 2025
+        ]
+
+        # 🔥 ESPACIO ENTRE FILAS (clave UX)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+# -------------------------
+# Eliminar filas
+# -------------------------
 if rows_delete:
-    st.session_state.tabla.drop(rows_delete,inplace=True)
-    st.session_state.tabla.reset_index(drop=True,inplace=True)
+    st.session_state.tabla.drop(rows_delete, inplace=True)
+    st.session_state.tabla.reset_index(drop=True, inplace=True)
     st.rerun()
 
 # =========================
