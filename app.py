@@ -50,8 +50,26 @@ def read_base(dbx):
 
 def write_base(dbx, df):
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer) as writer:
+
+    # ASEGURAR QUE LAS FECHAS SON REALES
+    df["Inicio"] = pd.to_datetime(df["Inicio"], errors="coerce")
+    df["Fin"] = pd.to_datetime(df["Fin"], errors="coerce")
+
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
+
+        workbook = writer.book
+        sheet = writer.sheets["Sheet1"]
+
+        # APLICAR FORMATO DE FECHA
+        for col in ["Inicio", "Fin"]:
+            if col in df.columns:
+                col_idx = df.columns.get_loc(col) + 1
+
+                for row in range(2, len(df) + 2):
+                    cell = sheet.cell(row=row, column=col_idx)
+                    cell.number_format = "YYYY-MM-DD"
+
     buffer.seek(0)
     dbx.files_upload(buffer.read(), DROPBOX_FILE, mode=dropbox.files.WriteMode.overwrite)
 
