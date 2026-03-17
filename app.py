@@ -130,12 +130,14 @@ alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 # =========================
 # CREA COLUMNA NÚMERICA PARA ORDENAR 
 # =========================
-alineacion["orden"] = alineacion["Estrategia"].apply(safe_num)
-    lambda x: float(x.split()[0]) if isinstance(x, str) else 999
+def safe_num(x):
+    try:
+        return float(str(x).split()[0])
+    except:
+        return 999
 
-# =========================
-# ORDENA DATAFRAME
-# =========================
+alineacion["orden"] = alineacion["Estrategia"].apply(safe_num)
+
 alineacion = alineacion.sort_values("orden")
 
 actores = pd.read_excel("www/pi-actores.xlsx")
