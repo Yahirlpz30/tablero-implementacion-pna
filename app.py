@@ -229,83 +229,90 @@ add = b1.button("+ Agregar Acción")
 save = b2.button("Guardar Borrador")
 send = b3.button("Enviar")
 
-st.markdown("### Nueva acción")
+# =========================
+# TABLA (SIEMPRE VISIBLE)
+# =========================
+st.markdown("### Acciones")
 
-c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
+rows_delete = []
 
-estrategia = c1.selectbox("Estrategia", [""] + estrategias)
+for i in range(len(st.session_state.tabla)):
 
-lineas = alineacion_filtrada[
-    alineacion_filtrada["Estrategia"] == estrategia
-]["Línea de acción"].unique() if estrategia else []
+    r = st.session_state.tabla.loc[i]
 
-linea = c2.selectbox("Línea de acción", [""] + list(lineas))
+    c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([2,3,3,2,2,2,2,1])
 
-accion = c3.text_input("Acción")
-
-inicio = c4.date_input("Inicio", value=datetime.date.today())
-fin = c5.date_input("Fin", value=datetime.date.today())
-
-tipo = c6.selectbox("Tipo de Acción", [""] + list(lista_tipo_accion))
-tem = c7.selectbox("Temática", [""] + list(lista_tematicas))
-
-if st.button("Agregar acción"):
-
-    nueva = pd.DataFrame([{
-        "Estrategia": estrategia,
-        "Línea de acción": linea,
-        "Acción": accion,
-        "Inicio": inicio,
-        "Fin": fin,
-        "Tipo de Acción": tipo,
-        "Temática": tem,
-        "Actor": actor if actor else "",
-        "Usuario": usuario,
-        "Año": 2025
-    }])
-
-    st.session_state.tabla = pd.concat(
-        [st.session_state.tabla, nueva],
-        ignore_index=True
+    estrategia = c1.selectbox(
+        "Estrategia",
+        [""] + estrategias,
+        key=f"estr_{i}"
     )
 
-# =========================
-# TABLA SESSION
-# =========================
-if "tabla" not in st.session_state or not isinstance(st.session_state.tabla, pd.DataFrame):
+    lineas = alineacion_filtrada[
+        alineacion_filtrada["Estrategia"] == estrategia
+    ]["Línea de acción"].unique() if estrategia else []
 
-    st.session_state.tabla = pd.DataFrame({
-        "Estrategia": [],
-        "Línea de acción": [],
-        "Acción": [],
-        "Inicio": [],
-        "Fin": [],
-        "Tipo de Acción": [],
-        "Temática": [],
-        "Actor": [],
-        "Usuario": [],
-        "Año": []
-    })
-
-if add:
-
-    nueva = pd.DataFrame([{
-        "Estrategia":"",
-        "Línea de acción":"",
-        "Acción":"",
-        "Inicio":"",
-        "Fin":"",
-        "Tipo de Acción":"",
-        "Temática":"",
-        "Actor":actor if actor else "",
-        "Usuario":usuario,
-        "Año":2025
-    }])
-
-    st.session_state.tabla = pd.concat(
-        [st.session_state.tabla, nueva],
-        ignore_index=True
+    linea = c2.selectbox(
+        "Línea de acción",
+        [""] + list(lineas),
+        key=f"lin_{i}"
     )
+
+    accion = c3.text_input("Acción", key=f"acc_{i}")
+
+    inicio = c4.date_input(
+        "Inicio",
+        value=datetime.date.today(),
+        key=f"ini_{i}"
+    )
+
+    fin = c5.date_input(
+        "Fin",
+        value=datetime.date.today(),
+        key=f"fin_{i}"
+    )
+
+    tipo = c6.selectbox(
+        "Tipo de Acción",
+        [""] + list(lista_tipo_accion),
+        key=f"tipo_{i}"
+    )
+
+    tem = c7.selectbox(
+        "Temática",
+        [""] + list(lista_tematicas),
+        key=f"tem_{i}"
+    )
+
+    delete = c8.button("🗑️", key=f"del_{i}")
+
+    if delete:
+        rows_delete.append(i)
+
+    st.session_state.tabla.loc[i] = [
+        estrategia,
+        linea,
+        accion,
+        inicio,
+        fin,
+        tipo,
+        tem,
+        actor if actor else "",
+        usuario,
+        2025
+    ]
+
+    # 🔥 SOLUCIÓN AL PROBLEMA (ESPACIO ENTRE FILAS)
+    st.markdown("<br><br>", unsafe_allow_html=True)
+
+
+# =========================
+# ELIMINAR FILAS
+# =========================
+if rows_delete:
+    st.session_state.tabla.drop(rows_delete, inplace=True)
+    st.session_state.tabla.reset_index(drop=True, inplace=True)
+    st.rerun()
 
 # =========================
 # INFO TABLA
