@@ -130,8 +130,12 @@ alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 # =========================
 # CREA COLUMNA NÚMERICA PARA ORDENAR 
 # =========================
-alineacion["orden"] = alineacion["Estrategia"].apply(
+alineacion["orden"] = alineacion["Estrategia"].apply(safe_num)
     lambda x: float(x.split()[0]) if isinstance(x, str) else 999
+)
+
+# Ordenar TODO el dataframe
+alineacion = alineacion.sort_values("orden")
 )
 # =========================
 # ORDENA DATAFRAME
