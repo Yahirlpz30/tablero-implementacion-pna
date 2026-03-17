@@ -200,9 +200,12 @@ acciones = len(st.session_state.tabla)
 if "ultimo_guardado" not in st.session_state:
     msg_guardado = "aún no se ha guardado"
 else:
-    diff = datetime.datetime.now() - st.session_state.ultimo_guardado
-    minutos = int(diff.total_seconds()/60)
-    msg_guardado = f"hace {minutos} min" if minutos>0 else "hace unos segundos"
+    if "ultimo_guardado" not in st.session_state or st.session_state.ultimo_guardado is None:
+        msg_guardado = "aún no se ha guardado"
+    else:
+        diff = datetime.datetime.now() - st.session_state.ultimo_guardado
+        minutos = int(diff.total_seconds()/60)
+        msg_guardado = f"hace {minutos} min" if minutos>0 else "hace unos segundos"
 
 st.info(f"Año: 2025 | Acciones: {acciones} | Guardado: {msg_guardado}")
 
