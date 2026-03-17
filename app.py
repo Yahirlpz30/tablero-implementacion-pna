@@ -131,13 +131,13 @@ users = pd.read_excel("www/user-pass.xlsx")
 if not st.session_state.login:
 
     col_logo, col_title = st.columns([1,3])
-
-with col_logo:
-    if os.path.exists("www/logo_tablero.png"):
-        st.image("www/logo_tablero.png", width=120)
-
-with col_title:
-    st.title("INICIAR SESIÓN")
+    
+    with col_logo:
+        if os.path.exists("www/logo_tablero.png"):
+            st.image("www/logo_tablero.png", width=120)
+    
+    with col_title:
+        st.title("INICIAR SESIÓN")
 
     u = st.text_input("Usuario")
     p = st.text_input("Contraseña", type="password")
