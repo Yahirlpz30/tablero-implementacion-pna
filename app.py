@@ -127,10 +127,12 @@ if not st.session_state.login:
 # =========================
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 actores = pd.read_excel("www/pi-actores.xlsx")
-
 usuario = st.session_state.usuario
 rol = st.session_state.rol
-
+tipos_accion = pd.read_excel("www/tipo_accion.xlsx")
+tematicas = pd.read_excel("www/tematicas.xlsx")
+lista_tipo_accion = tipos_accion["Tipo de Acción"].dropna().unique()
+lista_tematicas = tematicas["Temática"].dropna().unique()
 actor = usuario[:-1] if rol != "admin" else None
 
 # =========================
@@ -251,8 +253,17 @@ for i in range(len(st.session_state.tabla)):
     accion = c3.text_input("Acción",key=f"acc_{i}")
     inicio = c4.date_input("Inicio",value=datetime.date.today(),key=f"ini_{i}")
     fin = c5.date_input("Fin",value=datetime.date.today(),key=f"fin_{i}")
-    tipo = c6.text_input("Tipo de Acción",key=f"tipo_{i}")
-    tem = c7.text_input("Temática",key=f"tem_{i}")
+    tipo = c6.selectbox(
+    "Tipo de Acción",
+    [""] + list(lista_tipo_accion),
+    key=f"tipo_{i}"
+)
+
+tem = c7.selectbox(
+    "Temática",
+    [""] + list(lista_tematicas),
+    key=f"tem_{i}"
+)
 
     delete = c8.button("🗑️",key=f"del_{i}")
 
