@@ -51,6 +51,36 @@ div[data-baseweb="popover"] {
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+
+.card {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e6e6e6;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.fila {
+    border-bottom: 1px solid #eee;
+    padding: 10px 0;
+}
+
+.header-tabla {
+    font-weight: 600;
+    color: #555;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 8px;
+}
+
+div[data-baseweb="popover"] {
+    z-index: 999999 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 # =========================
 # SESSION STATE
 # =========================
@@ -187,26 +217,66 @@ actor = usuario
 # =========================
 # HEADER
 # =========================
-col1, col2, col3 = st.columns([1,6,2])
+st.markdown("""
+<style>
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #f5f6f7;
+    padding: 10px 20px;
+    border-bottom: 1px solid #ddd;
+}
 
-with col1:
-    if os.path.exists("www/logo_tablero.png"):
-        st.image("www/logo_tablero.png", width=140)
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
 
-with col2:
-    st.markdown("## Sistema Estatal Anticorrupción")
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
-with col3:
+.btn-logout button {
+    background-color: #a61c3c !important;
+    color: white !important;
+    border-radius: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+col_header1, col_header2 = st.columns([8,2])
+
+with col_header1:
+    col_logo, col_title = st.columns([1,6])
+
+    with col_logo:
+        if os.path.exists("www/logo_tablero.png"):
+            st.image("www/logo_tablero.png", width=120)
+
+    with col_title:
+        st.markdown("### Sistema Estatal Anticorrupción")
+
+with col_header2:
     st.write(f"Usuario: {st.session_state.usuario}")
+
+    if st.button("Cerrar sesión"):
+        st.session_state.login = False
+        st.session_state.usuario = ""
+        st.session_state.rol = ""
+        st.rerun()
 
 # =========================
 # BOTONES
 # =========================
-b1,b2,b3 = st.columns(3)
+c1, c2, c3 = st.columns([2,2,2])
 
-add = b1.button("➕ Agregar acción", use_container_width=True)
-save = b2.button("💾 Guardar borrador", use_container_width=True)
-send = b3.button("📤 Enviar", use_container_width=True)
+add = c1.button("➕ Agregar Acción", use_container_width=True)
+save = c2.button(" Guardar Borrador", use_container_width=True)
+send = c3.button(" Enviar", use_container_width=True)
 
 if add:
     nueva = pd.DataFrame([{
