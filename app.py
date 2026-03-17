@@ -125,9 +125,6 @@ if not st.session_state.login:
 # =========================
 # CARGA EXCEL
 # =========================
-# =========================
-# CARGA EXCEL
-# =========================
 import re
 
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
@@ -192,7 +189,12 @@ else:
         alineacion["Línea de acción"].isin(lineas_actor)
     ]
 
-estrategias = sorted(alineacion_filtrada["Estrategia"].unique())
+alineacion_filtrada["Estrategia"] = alineacion_filtrada["Estrategia"].astype(str).str.strip()
+
+estrategias = []
+for e in alineacion_filtrada["Estrategia"]:
+    if pd.notna(e) and e not in estrategias:
+        estrategias.append(e)
 
 # =========================
 # TITULO
