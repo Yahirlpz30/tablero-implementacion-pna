@@ -127,16 +127,20 @@ if not st.session_state.login:
 # =========================
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 actores = pd.read_excel("www/pi-actores.xlsx")
+
 usuario = st.session_state.usuario
 rol = st.session_state.rol
+
 tipos_accion = pd.read_excel("www/tipo_accion.xlsx")
 tipos_accion.columns = tipos_accion.columns.str.strip()
+
 lista_tipo_accion = tipos_accion.iloc[:,0].dropna().unique().tolist()
+
 tematicas = pd.read_excel("www/tipo_accion.xlsx")
-tipos_accion.columns = tipos_accion.columns.str.strip()
-lista_tipo_accion = tipos_accion.iloc[:,0].dropna().unique().tolist()
-lista_tipo_accion = tipos_accion["Tipo de Acción"].dropna().unique()
+tematicas.columns = tematicas.columns.str.strip()
+
 lista_tematicas = tematicas["Tematica"].dropna().unique().tolist()
+
 actor = usuario[:-1] if rol != "admin" else None
 
 # =========================
