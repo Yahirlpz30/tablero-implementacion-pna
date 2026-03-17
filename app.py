@@ -127,19 +127,17 @@ if not st.session_state.login:
 # =========================
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 
-    # -------------------------
-    # ORDENAR
-    # -------------------------
-    def ordenar_estrategia(x):
-        try:
-            return float(x.split()[0])
-        except:
-            return 999
-    
-    estrategias = sorted(
-        alineacion["Estrategia"].dropna().unique(),
-        key=ordenar_estrategia
-    )
+# =========================
+# CREA COLUMNA NÚMERICA PARA ORDENAR 
+# =========================
+alineacion["orden"] = alineacion["Estrategia"].apply(
+    lambda x: float(x.split()[0]) if isinstance(x, str) else 999
+)
+# =========================
+# ORDENA DATAFRAME
+# =========================
+alineacion = alineacion.sort_values("orden")
+
 actores = pd.read_excel("www/pi-actores.xlsx")
 
 usuario = st.session_state.usuario
