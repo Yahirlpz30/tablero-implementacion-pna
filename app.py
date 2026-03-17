@@ -335,8 +335,13 @@ if save or send:
         st.error("Dropbox no configurado")
     else:
 
-        if not acquire_lock(dbx):
-            st.warning("Otro usuario está guardando")
+        try:
+            if not acquire_lock(dbx):
+                st.warning("Otro usuario está guardando")
+                st.stop()
+        except Exception as e:
+            st.error("Error de conexión con Dropbox")
+            st.stop()
         else:
 
             try:
