@@ -254,16 +254,16 @@ for i in range(len(st.session_state.tabla)):
     inicio = c4.date_input("Inicio",value=datetime.date.today(),key=f"ini_{i}")
     fin = c5.date_input("Fin",value=datetime.date.today(),key=f"fin_{i}")
     tipo = c6.selectbox(
-    "Tipo de Acción",
-    [""] + list(lista_tipo_accion),
-    key=f"tipo_{i}"
-)
-
-tem = c7.selectbox(
-    "Temática",
-    [""] + list(lista_tematicas),
-    key=f"tem_{i}"
-)
+        "Tipo de Acción",
+        [""] + list(lista_tipo_accion),
+        key=f"tipo_{i}"
+    )
+    
+    tem = c7.selectbox(
+        "Temática",
+        [""] + list(lista_tematicas),
+        key=f"tem_{i}"
+    )
 
     delete = c8.button("🗑️",key=f"del_{i}")
 
