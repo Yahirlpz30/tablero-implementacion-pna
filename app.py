@@ -139,7 +139,7 @@ lista_tipo_accion = tipos_accion.iloc[:,0].dropna().unique().tolist()
 tematicas = pd.read_excel("www/tipo_accion.xlsx")
 tematicas.columns = tematicas.columns.str.strip()
 
-lista_tematicas = tematicas["Tematica"].dropna().unique().tolist()
+lista_tematicas = tematicas.iloc[:,0].dropna().unique().tolist()
 
 actor = usuario[:-1] if rol != "admin" else None
 
