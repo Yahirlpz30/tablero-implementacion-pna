@@ -229,6 +229,46 @@ add = b1.button("+ Agregar Acción")
 save = b2.button("Guardar Borrador")
 send = b3.button("Enviar")
 
+st.markdown("### Nueva acción")
+
+c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
+
+estrategia = c1.selectbox("Estrategia", [""] + estrategias)
+
+lineas = alineacion_filtrada[
+    alineacion_filtrada["Estrategia"] == estrategia
+]["Línea de acción"].unique() if estrategia else []
+
+linea = c2.selectbox("Línea de acción", [""] + list(lineas))
+
+accion = c3.text_input("Acción")
+
+inicio = c4.date_input("Inicio", value=datetime.date.today())
+fin = c5.date_input("Fin", value=datetime.date.today())
+
+tipo = c6.selectbox("Tipo de Acción", [""] + list(lista_tipo_accion))
+tem = c7.selectbox("Temática", [""] + list(lista_tematicas))
+
+if st.button("Agregar acción"):
+
+    nueva = pd.DataFrame([{
+        "Estrategia": estrategia,
+        "Línea de acción": linea,
+        "Acción": accion,
+        "Inicio": inicio,
+        "Fin": fin,
+        "Tipo de Acción": tipo,
+        "Temática": tem,
+        "Actor": actor if actor else "",
+        "Usuario": usuario,
+        "Año": 2025
+    }])
+
+    st.session_state.tabla = pd.concat(
+        [st.session_state.tabla, nueva],
+        ignore_index=True
+    )
+
 # =========================
 # TABLA SESSION
 # =========================
@@ -283,112 +323,6 @@ else:
         msg_guardado = f"hace {minutos} min" if minutos>0 else "hace unos segundos"
 
 st.info(f"Año: 2025 | Acciones: {acciones} | Guardado: {msg_guardado}")
-
-# =========================
-# TABLA (MEJORADA UX)
-# =========================
-st.markdown("### Acciones")
-
-rows_delete = []
-
-for i in range(len(st.session_state.tabla)):
-
-    with st.container():   # 🔥 evita que se encimen los dropdowns
-
-        r = st.session_state.tabla.loc[i]
-
-        c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([3,3,3,2,2,2,2,1])
-
-        # -------------------------
-        # Estrategia
-        # -------------------------
-        estrategia = c1.selectbox(
-            "Estrategia",
-            [""] + estrategias,
-            key=f"estr_{i}"
-        )
-
-        # -------------------------
-        # Línea de acción
-        # -------------------------
-        lineas = alineacion_filtrada[
-            alineacion_filtrada["Estrategia"] == estrategia
-        ]["Línea de acción"].unique() if estrategia else []
-
-        linea = c2.selectbox(
-            "Línea de acción",
-            [""] + list(lineas),
-            key=f"lin_{i}"
-        )
-
-        # -------------------------
-        # Acción
-        # -------------------------
-        accion = c3.text_input(
-            "Acción",
-            value=r["Acción"],
-            key=f"acc_{i}"
-        )
-
-        # -------------------------
-        # Fechas
-        # -------------------------
-        inicio = c4.date_input(
-            "Inicio",
-            value=datetime.date.today(),
-            key=f"ini_{i}"
-        )
-
-        fin = c5.date_input(
-            "Fin",
-            value=datetime.date.today(),
-            key=f"fin_{i}"
-        )
-
-        # -------------------------
-        # Tipo de Acción
-        # -------------------------
-        tipo = c6.selectbox(
-            "Tipo de Acción",
-            [""] + list(lista_tipo_accion),
-            key=f"tipo_{i}"
-        )
-
-        # -------------------------
-        # Temática
-        # -------------------------
-        tem = c7.selectbox(
-            "Temática",
-            [""] + list(lista_tematicas),
-            key=f"tem_{i}"
-        )
-
-        # -------------------------
-        # Botón eliminar
-        # -------------------------
-        delete = c8.button("🗑️", key=f"del_{i}")
-
-        if delete:
-            rows_delete.append(i)
-
-        # -------------------------
-        # Guardar en session
-        # -------------------------
-        st.session_state.tabla.loc[i] = [
-            estrategia, linea, accion, inicio, fin, tipo, tem,
-            actor if actor else "", usuario, 2025
-        ]
-
-        # 🔥 ESPACIO ENTRE FILAS (clave UX)
-        st.markdown("<br>", unsafe_allow_html=True)
-
-# -------------------------
-# Eliminar filas
-# -------------------------
-if rows_delete:
-    st.session_state.tabla.drop(rows_delete, inplace=True)
-    st.session_state.tabla.reset_index(drop=True, inplace=True)
-    st.rerun()
 
 # =========================
 # GUARDAR DROPBOX
