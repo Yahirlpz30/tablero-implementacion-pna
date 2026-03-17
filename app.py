@@ -125,13 +125,21 @@ if not st.session_state.login:
 # =========================
 # CARGA EXCEL
 # =========================
+# =========================
+# CARGA EXCEL
+# =========================
+import re
+
 alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 
 # =========================
-# CREA COLUMNA NÚMERICA PARA ORDENAR 
+# LIMPIA TEXTO
 # =========================
-import re
-alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+alineacion["Estrategia"] = alineacion["Estrategia"].astype(str).str.strip()
+
+# =========================
+# CREA ORDEN NUMÉRICO
+# =========================
 def extraer_numero(x):
     match = re.search(r"\d+\.\d+", str(x))
     if match:
@@ -140,8 +148,14 @@ def extraer_numero(x):
 
 alineacion["orden"] = alineacion["Estrategia"].apply(extraer_numero)
 
+# =========================
+# ORDENA
+# =========================
 alineacion = alineacion.sort_values("orden")
 
+# =========================
+# CREA LISTA ORDENADA
+# =========================
 estrategias = []
 for e in alineacion["Estrategia"]:
     if pd.notna(e) and e not in estrategias:
