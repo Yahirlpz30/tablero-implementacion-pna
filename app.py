@@ -4,87 +4,236 @@ import datetime
 import os
 import io
 import dropbox
-import re
 
 st.set_page_config(layout="wide")
 
 # =========================
-# CSS PRO
+# CONFIG DROPBOX
 # =========================
-st.markdown("""
-<style>
+DROPBOX_TOKEN = st.secrets.get("DROPBOX_TOKEN", "")
+DROPBOX_FILE = "/tablero_prueba/base.xlsx"
+DROPBOX_LOCK = "/tablero_prueba/base.lock"
 
-/* TABLA TIPO DASHBOARD */
-.card-tabla {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e6e6e6;
-    padding: 15px;
-    margin-top: 10px;
-}
+def get_dbx():
+    if not DROPBOX_TOKEN:
+        return None
+    return dropbox.Dropbox(DROPBOX_TOKEN)
 
-/* HEADER */
-.header-tabla {
-    font-weight: 600;
-    color: #555;
-    border-bottom: 2px solid #e6e6e6;
-    padding-bottom: 8px;
-    margin-bottom: 10px;
-}
+def dbx_exists(dbx, path):
+    try:
+        dbx.files_get_metadata(path)
+        return True
+    except:
+        return False
 
-/* FILAS */
-.fila-tabla {
-    border-bottom: 1px solid #eee;
-    padding: 10px 0;
-}
+def acquire_lock(dbx):
+    if dbx_exists(dbx, DROPBOX_LOCK):
+        meta = dbx.files_get_metadata(DROPBOX_LOCK)
+        server_time = meta.server_modified.replace(tzinfo=None)
+        if (datetime.datetime.utcnow() - server_time).total_seconds() < 300:
+            return False
+        dbx.files_delete_v2(DROPBOX_LOCK)
+    dbx.files_upload(b"lock", DROPBOX_LOCK, mode=dropbox.files.WriteMode.overwrite)
+    return True
 
-/* SOLUCIÓN DROPDOWN (CLAVE) */
-div[data-baseweb="popover"] {
-    z-index: 999999 !important;
-}
+def release_lock(dbx):
+    if dbx_exists(dbx, DROPBOX_LOCK):
+        dbx.files_delete_v2(DROPBOX_LOCK)
 
-/* ESPACIO ENTRE FILAS */
-.bloque-fila {
-    margin-bottom: 15px;
-}
+def read_base(dbx):
+    if not dbx or not dbx_exists(dbx, DROPBOX_FILE):
+        return pd.DataFrame(columns=[
+            "Estrategia","Línea de acción","Acción","Inicio","Fin","Tipo de Acción","Temática","Actor","Usuario","Año"
+        ])
+    _, res = dbx.files_download(DROPBOX_FILE)
+    return pd.read_excel(io.BytesIO(res.content))
 
-</style>
-""", unsafe_allow_html=True)
+def write_base(dbx, df):
+    buffer = io.BytesIO()
 
-st.markdown("""
-<style>
+    # ASEGURAR QUE LAS FECHAS SON REALES
+    df["Inicio"] = pd.to_datetime(df["Inicio"], errors="coerce")
+    df["Fin"] = pd.to_datetime(df["Fin"], errors="coerce")
 
-.card {
-    background: #ffffff;
-    border-radius: 12px;
-    border: 1px solid #e6e6e6;
-    padding: 20px;
-    margin-top: 15px;
-}
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False)
 
-.fila {
-    border-bottom: 1px solid #eee;
-    padding: 10px 0;
-}
+        workbook = writer.book
+        sheet = writer.sheets["Sheet1"]
 
-.header-tabla {
-    font-weight: 600;
-    color: #555;
-    border-bottom: 2px solid #eee;
-    padding-bottom: 8px;
-}
+        # APLICAR FORMATO DE FECHA
+        for col in ["Inicio", "Fin"]:
+            if col in df.columns:
+                col_idx = df.columns.get_loc(col) + 1
 
-div[data-baseweb="popover"] {
-    z-index: 999999 !important;
-}
+                for row in range(2, len(df) + 2):
+                    cell = sheet.cell(row=row, column=col_idx)
+                    cell.number_format = "YYYY-MM-DD"
 
-</style>
-""", unsafe_allow_html=True)
+    buffer.seek(0)
+    dbx.files_upload(buffer.read(), DROPBOX_FILE, mode=dropbox.files.WriteMode.overwrite)
 
 # =========================
-# SESSION STATE
+# SESSION STATE SEGURO
 # =========================
-if "tabla" not in st.session_state:
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+if "usuario" not in st.session_state:
+    st.session_state.usuario = ""
+
+if "rol" not in st.session_state:
+    st.session_state.rol = ""
+
+# =========================
+# LOGO Y HEADER
+# =========================
+logo = "www/logo_tablero.png"
+
+col1,col2,col3 = st.columns([1,6,2])
+
+with col1:
+    if os.path.exists(logo):
+        st.image(logo,width=140)
+
+with col2:
+    st.markdown("## SISTEMA ESTATAL ANTICORRUPCIÓN")
+
+with col3:
+    if st.session_state.login:
+        st.write(f"Usuario: {st.session_state.usuario}")
+        if st.button("Cerrar sesión"):
+            st.session_state.login=False
+            st.session_state.usuario=""
+            st.session_state.rol=""
+            st.rerun()
+
+# =========================
+# LOGIN
+# =========================
+users = pd.read_excel("www/user-pass.xlsx")
+
+if not st.session_state.login:
+
+    st.markdown("### Iniciar sesión")
+
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+
+    if st.button("Entrar"):
+
+        user = users[
+            (users["user"] == usuario) &
+            (users["password"] == password)
+        ]
+
+        if len(user) > 0:
+
+            st.session_state.login = True
+            st.session_state.usuario = usuario
+            st.session_state.rol = user.iloc[0]["permissions"]
+
+            st.rerun()
+
+        else:
+            st.error("Usuario o contraseña incorrectos")
+
+    st.stop()
+
+# =========================
+# CARGA EXCEL
+# =========================
+import re
+
+alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+
+# =========================
+# LIMPIA TEXTO
+# =========================
+alineacion["Estrategia"] = alineacion["Estrategia"].astype(str).str.strip()
+
+# =========================
+# CREA ORDEN NUMÉRICO
+# =========================
+def extraer_numero(x):
+    match = re.search(r"\d+\.\d+", str(x))
+    if match:
+        return float(match.group())
+    return 999
+
+alineacion["orden"] = alineacion["Estrategia"].apply(extraer_numero)
+
+# =========================
+# ORDENA
+# =========================
+alineacion = alineacion.sort_values("orden")
+
+# =========================
+# CREA LISTA ORDENADA
+# =========================
+estrategias = []
+for e in alineacion["Estrategia"]:
+    if pd.notna(e) and e not in estrategias:
+        estrategias.append(e)
+
+actores = pd.read_excel("www/pi-actores.xlsx")
+
+usuario = st.session_state.usuario
+rol = st.session_state.rol
+
+tipos_accion = pd.read_excel("www/tipo_accion.xlsx")
+tipos_accion.columns = tipos_accion.columns.str.strip()
+
+lista_tipo_accion = tipos_accion.iloc[:,0].dropna().unique().tolist()
+
+tematicas = pd.read_excel("www/tematicas.xlsx")
+tematicas.columns = tematicas.columns.str.strip()
+
+lista_tematicas = tematicas.iloc[:,0].dropna().unique().tolist()
+
+actor = usuario[:-1] if rol != "admin" else None
+
+# =========================
+# FILTRAR POR ACTOR
+# =========================
+if rol == "admin":
+    alineacion_filtrada = alineacion
+else:
+    lineas_actor = actores[
+        actores["Actor"] == actor
+    ]["Línea de acción"].unique()
+
+    alineacion_filtrada = alineacion[
+        alineacion["Línea de acción"].isin(lineas_actor)
+    ]
+
+alineacion_filtrada["Estrategia"] = alineacion_filtrada["Estrategia"].astype(str).str.strip()
+
+estrategias = []
+for e in alineacion_filtrada["Estrategia"]:
+    if pd.notna(e) and e not in estrategias:
+        estrategias.append(e)
+
+# =========================
+# TITULO
+# =========================
+st.markdown("# Reporte de Acciones 2025")
+st.caption("Programa de Implementación del PNA")
+
+# =========================
+# BOTONES
+# =========================
+b1,b2,b3 = st.columns(3)
+
+add = b1.button("+ Agregar Acción")
+save = b2.button("Guardar Borrador")
+send = b3.button("Enviar")
+
+# =========================
+# TABLA SESSION
+# =========================
+if "tabla" not in st.session_state or not isinstance(st.session_state.tabla, pd.DataFrame):
+
     st.session_state.tabla = pd.DataFrame({
         "Estrategia": [],
         "Línea de acción": [],
@@ -98,224 +247,58 @@ if "tabla" not in st.session_state:
         "Año": []
     })
 
-if "login" not in st.session_state:
-    st.session_state.login = False
-
-# =========================
-# DROPBOX
-# =========================
-DROPBOX_TOKEN = st.secrets.get("DROPBOX_TOKEN", "")
-DROPBOX_FILE = "/tablero_prueba/base.xlsx"
-DROPBOX_LOCK = "/tablero_prueba/base.lock"
-
-def get_dbx():
-    return dropbox.Dropbox(DROPBOX_TOKEN) if DROPBOX_TOKEN else None
-
-def dbx_exists(dbx, path):
-    try:
-        dbx.files_get_metadata(path)
-        return True
-    except:
-        return False
-
-def acquire_lock(dbx):
-    if dbx_exists(dbx, DROPBOX_LOCK):
-        return False
-    dbx.files_upload(b"lock", DROPBOX_LOCK, mode=dropbox.files.WriteMode.overwrite)
-    return True
-
-def release_lock(dbx):
-    if dbx_exists(dbx, DROPBOX_LOCK):
-        dbx.files_delete_v2(DROPBOX_LOCK)
-
-def read_base(dbx):
-    if not dbx or not dbx_exists(dbx, DROPBOX_FILE):
-        return pd.DataFrame()
-    _, res = dbx.files_download(DROPBOX_FILE)
-    return pd.read_excel(io.BytesIO(res.content))
-
-def write_base(dbx, df):
-    buffer = io.BytesIO()
-
-    df["Inicio"] = pd.to_datetime(df["Inicio"], errors="coerce")
-    df["Fin"] = pd.to_datetime(df["Fin"], errors="coerce")
-
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False)
-
-        sheet = writer.sheets["Sheet1"]
-
-        for col in ["Inicio", "Fin"]:
-            col_idx = df.columns.get_loc(col) + 1
-            for row in range(2, len(df) + 2):
-                sheet.cell(row=row, column=col_idx).number_format = "YYYY-MM-DD"
-
-    buffer.seek(0)
-    dbx.files_upload(buffer.read(), DROPBOX_FILE, mode=dropbox.files.WriteMode.overwrite)
-
-# =========================
-# LOGIN
-# =========================
-users = pd.read_excel("www/user-pass.xlsx")
-
-if not st.session_state.login:
-
-    col_logo, col_title = st.columns([1,3])
-    
-    with col_logo:
-        if os.path.exists("www/logo_tablero.png"):
-            st.image("www/logo_tablero.png", width=120)
-    
-    with col_title:
-        st.title("INICIAR SESIÓN")
-
-    u = st.text_input("Usuario")
-    p = st.text_input("Contraseña", type="password")
-
-    if st.button("Entrar"):
-        user = users[(users["user"] == u) & (users["password"] == p)]
-        if len(user):
-            st.session_state.login = True
-            st.session_state.usuario = u
-            st.session_state.rol = user.iloc[0]["permissions"]
-            st.rerun()
-        else:
-            st.error("Credenciales incorrectas")
-
-    st.stop()
-
-# =========================
-# SIDEBAR
-# =========================
-with st.sidebar:
-    st.markdown("# 2025")
-
-# =========================
-# DATA
-# =========================
-alineacion = pd.read_excel("www/alineacion_pi.xlsx")
-alineacion["Estrategia"] = alineacion["Estrategia"].astype(str).str.strip()
-
-def extraer(x):
-    m = re.search(r"\d+\.\d+", str(x))
-    return float(m.group()) if m else 999
-
-alineacion["orden"] = alineacion["Estrategia"].apply(extraer)
-alineacion = alineacion.sort_values("orden")
-
-estrategias = alineacion["Estrategia"].dropna().unique().tolist()
-
-tipos_accion = pd.read_excel("www/tipo_accion.xlsx")
-lista_tipo_accion = tipos_accion.iloc[:,0].dropna().tolist()
-
-tematicas = pd.read_excel("www/tematicas.xlsx")
-lista_tematicas = tematicas.iloc[:,0].dropna().tolist()
-
-usuario = st.session_state.usuario
-actor = usuario
-
-# =========================
-# HEADER
-# =========================
-st.markdown("""
-<style>
-.header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background-color: #f5f6f7;
-    padding: 10px 20px;
-    border-bottom: 1px solid #ddd;
-}
-
-.header-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.header-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.btn-logout button {
-    background-color: #a61c3c !important;
-    color: white !important;
-    border-radius: 8px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-col_header1, col_header2 = st.columns([8,2])
-
-with col_header1:
-    col_logo, col_title = st.columns([1,6])
-
-    with col_logo:
-        if os.path.exists("www/logo_tablero.png"):
-            st.image("www/logo_tablero.png", width=120)
-
-    with col_title:
-        st.markdown("### Sistema Estatal Anticorrupción")
-
-with col_header2:
-    st.write(f"Usuario: {st.session_state.usuario}")
-
-    if st.button("Cerrar sesión"):
-        st.session_state.login = False
-        st.session_state.usuario = ""
-        st.session_state.rol = ""
-        st.rerun()
-
-# =========================
-# BOTONES
-# =========================
-c1, c2, c3 = st.columns([2,2,2])
-
-add = c1.button("➕ Agregar Acción", use_container_width=True)
-save = c2.button(" Guardar Borrador", use_container_width=True)
-send = c3.button(" Enviar", use_container_width=True)
-
 if add:
+
     nueva = pd.DataFrame([{
-        "Estrategia":"","Línea de acción":"","Acción":"",
-        "Inicio":"","Fin":"","Tipo de Acción":"","Temática":"",
-        "Actor":actor,"Usuario":usuario,"Año":2025
+        "Estrategia":"",
+        "Línea de acción":"",
+        "Acción":"",
+        "Inicio":"",
+        "Fin":"",
+        "Tipo de Acción":"",
+        "Temática":"",
+        "Actor":actor if actor else "",
+        "Usuario":usuario,
+        "Año":2025
     }])
-    st.session_state.tabla = pd.concat([st.session_state.tabla, nueva], ignore_index=True)
-    st.rerun()
+
+    st.session_state.tabla = pd.concat(
+        [st.session_state.tabla, nueva],
+        ignore_index=True
+    )
 
 # =========================
-# TABLA PRO
+# INFO TABLA
 # =========================
-st.markdown('<div class="card-tabla">', unsafe_allow_html=True)
+acciones = len(st.session_state.tabla)
 
+if "ultimo_guardado" not in st.session_state:
+    msg_guardado = "aún no se ha guardado"
+else:
+    if "ultimo_guardado" not in st.session_state or st.session_state.ultimo_guardado is None:
+        msg_guardado = "aún no se ha guardado"
+    else:
+        diff = datetime.datetime.now() - st.session_state.ultimo_guardado
+        minutos = int(diff.total_seconds()/60)
+        msg_guardado = f"hace {minutos} min" if minutos>0 else "hace unos segundos"
+
+st.info(f"Año: 2025 | Acciones: {acciones} | Guardado: {msg_guardado}")
+
+# =========================
+# TABLA (SIEMPRE VISIBLE)
+# =========================
 st.markdown("### Acciones")
-
-# HEADER
-h1,h2,h3,h4,h5,h6,h7,h8 = st.columns([2,3,3,2,2,2,2,1])
-
-h1.markdown('<div class="header-tabla">Estrategia</div>', unsafe_allow_html=True)
-h2.markdown('<div class="header-tabla">Línea de acción</div>', unsafe_allow_html=True)
-h3.markdown('<div class="header-tabla">Acción</div>', unsafe_allow_html=True)
-h4.markdown('<div class="header-tabla">Inicio</div>', unsafe_allow_html=True)
-h5.markdown('<div class="header-tabla">Fin</div>', unsafe_allow_html=True)
-h6.markdown('<div class="header-tabla">Tipo de Acción</div>', unsafe_allow_html=True)
-h7.markdown('<div class="header-tabla">Temática</div>', unsafe_allow_html=True)
-h8.markdown("")
 
 rows_delete = []
 
 for i in range(len(st.session_state.tabla)):
 
-    st.markdown('<div class="bloque-fila">', unsafe_allow_html=True)
+    r = st.session_state.tabla.loc[i]
 
     c1,c2,c3,c4,c5,c6,c7,c8 = st.columns([2,3,3,2,2,2,2,1])
 
     estrategia = c1.selectbox(
-        "",
+        "Estrategia",
         [""] + estrategias,
         key=f"estr_{i}"
     )
@@ -325,49 +308,74 @@ for i in range(len(st.session_state.tabla)):
     ]["Línea de acción"].unique() if estrategia else []
 
     linea = c2.selectbox(
-        "",
+        "Línea de acción",
         [""] + list(lineas),
         key=f"lin_{i}"
     )
 
-    accion = c3.text_input("", key=f"acc_{i}")
+    accion = c3.text_input("Acción",key=f"acc_{i}")
+    inicio = c4.date_input("Inicio",value=datetime.date.today(),key=f"ini_{i}")
+    fin = c5.date_input("Fin",value=datetime.date.today(),key=f"fin_{i}")
+    tipo = c6.selectbox(
+        "Tipo de Acción",
+        [""] + list(lista_tipo_accion),
+        key=f"tipo_{i}"
+    )
+    
+    tem = c7.selectbox(
+        "Temática",
+        [""] + list(lista_tematicas),
+        key=f"tem_{i}"
+    )
 
-    inicio = c4.date_input("", value=datetime.date.today(), key=f"ini_{i}")
-    fin = c5.date_input("", value=datetime.date.today(), key=f"fin_{i}")
-
-    tipo = c6.selectbox("", [""] + lista_tipo_accion, key=f"tipo_{i}")
-    tem = c7.selectbox("", [""] + lista_tematicas, key=f"tem_{i}")
-
-    delete = c8.button("🗑️", key=f"del_{i}")
+    delete = c8.button("🗑️",key=f"del_{i}")
 
     if delete:
         rows_delete.append(i)
 
     st.session_state.tabla.loc[i] = [
-        estrategia, linea, accion, inicio, fin,
-        tipo, tem, actor if actor else "", usuario, 2025
+        estrategia,linea,accion,inicio,fin,tipo,tem,actor if actor else "",usuario,2025
     ]
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
-
 if rows_delete:
-    st.session_state.tabla.drop(rows_delete, inplace=True)
-    st.session_state.tabla.reset_index(drop=True, inplace=True)
+    st.session_state.tabla.drop(rows_delete,inplace=True)
+    st.session_state.tabla.reset_index(drop=True,inplace=True)
     st.rerun()
 
 # =========================
-# GUARDAR
+# GUARDAR DROPBOX
 # =========================
 if save or send:
+
     dbx = get_dbx()
-    if dbx:
-        if acquire_lock(dbx):
-            base = read_base(dbx)
-            final = pd.concat([base, st.session_state.tabla], ignore_index=True)
-            write_base(dbx, final)
-            release_lock(dbx)
-            st.success("Guardado correctamente")
+
+    if not dbx:
+        st.error("Dropbox no configurado")
+    else:
+
+        try:
+            if not acquire_lock(dbx):
+                st.warning("Otro usuario está guardando")
+                st.stop()
+        except Exception as e:
+            st.error("Error de conexión con Dropbox")
+            st.stop()
         else:
-            st.warning("Otro usuario está guardando")
+
+            try:
+
+                base = read_base(dbx)
+
+                nueva = pd.concat(
+                    [base, st.session_state.tabla],
+                    ignore_index=True
+                )
+
+                write_base(dbx, nueva)
+
+                st.session_state.ultimo_guardado = datetime.datetime.now()
+
+                st.success("Guardado correctamente")
+
+            finally:
+                release_lock(dbx)
