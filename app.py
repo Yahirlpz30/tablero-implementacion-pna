@@ -140,8 +140,10 @@ def safe_num(x):
         return 999
 
 alineacion["orden"] = alineacion["Estrategia"].apply(safe_num)
-
 alineacion = alineacion.sort_values("orden")
+
+estrategias = alineacion["Estrategia"].dropna().tolist()
+estrategias = list(dict.fromkeys(estrategias))
 
 actores = pd.read_excel("www/pi-actores.xlsx")
 
