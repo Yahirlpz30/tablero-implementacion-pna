@@ -131,19 +131,21 @@ alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 # CREA COLUMNA NÚMERICA PARA ORDENAR 
 # =========================
 import re
+alineacion = pd.read_excel("www/alineacion_pi.xlsx")
+def extraer_numero(x):
+    match = re.search(r"\d+\.\d+", str(x))
+    if match:
+        return float(match.group())
+    return 999
 
-def safe_num(x):
-    try:
-        num = re.findall(r"\d+\.\d+", str(x))[0]
-        return float(num)
-    except:
-        return 999
+alineacion["orden"] = alineacion["Estrategia"].apply(extraer_numero)
 
-alineacion["orden"] = alineacion["Estrategia"].apply(safe_num)
 alineacion = alineacion.sort_values("orden")
 
-estrategias = alineacion["Estrategia"].dropna().tolist()
-estrategias = list(dict.fromkeys(estrategias))
+estrategias = []
+for e in alineacion["Estrategia"]:
+    if pd.notna(e) and e not in estrategias:
+        estrategias.append(e)
 
 actores = pd.read_excel("www/pi-actores.xlsx")
 
