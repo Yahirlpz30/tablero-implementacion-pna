@@ -130,9 +130,12 @@ alineacion = pd.read_excel("www/alineacion_pi.xlsx")
 # =========================
 # CREA COLUMNA NÚMERICA PARA ORDENAR 
 # =========================
+import re
+
 def safe_num(x):
     try:
-        return float(str(x).split()[0])
+        num = re.findall(r"\d+\.\d+", str(x))[0]
+        return float(num)
     except:
         return 999
 
