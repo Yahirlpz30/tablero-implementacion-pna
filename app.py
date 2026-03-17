@@ -167,14 +167,24 @@ send = b3.button("Enviar")
 # =========================
 # TABLA SESSION
 # =========================
-if "tabla" not in st.session_state:
-    st.session_state.tabla = pd.DataFrame(columns=[
-        "Estrategia","Línea de acción","Acción","Inicio","Fin","Tipo de Acción","Temática","Actor","Usuario","Año"
-    ])
+if "tabla" not in st.session_state or not isinstance(st.session_state.tabla, pd.DataFrame):
+
+    st.session_state.tabla = pd.DataFrame({
+        "Estrategia": [],
+        "Línea de acción": [],
+        "Acción": [],
+        "Inicio": [],
+        "Fin": [],
+        "Tipo de Acción": [],
+        "Temática": [],
+        "Actor": [],
+        "Usuario": [],
+        "Año": []
+    })
 
 if add:
 
-    nueva = {
+    nueva = pd.DataFrame([{
         "Estrategia":"",
         "Línea de acción":"",
         "Acción":"",
@@ -185,10 +195,10 @@ if add:
         "Actor":actor if actor else "",
         "Usuario":usuario,
         "Año":2025
-    }
+    }])
 
     st.session_state.tabla = pd.concat(
-        [st.session_state.tabla, pd.DataFrame([nueva])],
+        [st.session_state.tabla, nueva],
         ignore_index=True
     )
 
