@@ -136,7 +136,7 @@ tipos_accion.columns = tipos_accion.columns.str.strip()
 
 lista_tipo_accion = tipos_accion.iloc[:,0].dropna().unique().tolist()
 
-tematicas = pd.read_excel("www/tipo_accion.xlsx")
+tematicas = pd.read_excel("www/tematicas.xlsx")
 tematicas.columns = tematicas.columns.str.strip()
 
 lista_tematicas = tematicas.iloc[:,0].dropna().unique().tolist()
